@@ -1,0 +1,30 @@
+schema_version: 1
+sync_tag: example-checkout
+reference_url: https://github.com/DataDog/metric-sync-cli
+warehouse_connection_id: 00000000-0000-0000-0000-000000000000
+warehouse_metric_sources:
+  - sync_id: checkout_events
+    name: Checkout events
+    sql: |
+      SELECT user_id, event_timestamp, revenue
+      FROM analytics.checkout_events
+    timestamp_column: event_timestamp
+    subject_types:
+      - name: User
+        column_name: user_id
+    measures:
+      - sync_id: revenue
+        name: revenue
+        column_name: revenue
+        column_type: FLOAT
+metrics:
+  - sync_id: checkout_revenue
+    name: Checkout revenue
+    metric_type: simple
+    desired_change: METRIC_INCREASES
+    simple_metric_aggregation:
+      operation: sum
+      measure:
+        warehouse_metric_source_sync_id: checkout_events
+        measure_sync_id: revenue
+      timeframe_start_value: 0

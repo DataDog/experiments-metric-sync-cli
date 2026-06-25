@@ -1,1 +1,0 @@
-# datadog-experiment-metric-sync-cli

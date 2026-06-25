@@ -1,0 +1,952 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.datadoghq.com/ffe/metric-sync/v1/metric_sync_v1.schema.json",
+  "title": "FFE Metric Sync V1 Request",
+  "description": "Authoritative V1 request schema for the unstable FFE metric sync API.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "sync_tag"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "sync_tag": {
+      "$ref": "#/$defs/sync_tag"
+    },
+    "reference_url": {
+      "$ref": "#/$defs/nullable_uri"
+    },
+    "warehouse_connection_id": {
+      "$ref": "#/$defs/uuid"
+    },
+    "warehouse_metric_sources": {
+      "type": "array",
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/warehouse_metric_source"
+      }
+    },
+    "metrics": {
+      "type": "array",
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/metric"
+      }
+    }
+  },
+  "$defs": {
+    "sync_tag": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 255,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]*$"
+    },
+    "sync_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]*$"
+    },
+    "non_empty_string": {
+      "type": "string",
+      "minLength": 1
+    },
+    "display_name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 255
+    },
+    "description": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "default": "",
+      "maxLength": 4096
+    },
+    "uuid": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "nullable_uri": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "uri",
+      "maxLength": 2048
+    },
+    "warehouse_column_type": {
+      "type": "string",
+      "enum": [
+        "STRING",
+        "INTEGER",
+        "FLOAT",
+        "BOOLEAN",
+        "DATE",
+        "TIMESTAMP"
+      ]
+    },
+    "warehouse_metric_source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sync_id",
+        "name",
+        "sql",
+        "timestamp_column",
+        "subject_types"
+      ],
+      "properties": {
+        "sync_id": {
+          "$ref": "#/$defs/sync_id"
+        },
+        "existing_id": {
+          "$ref": "#/$defs/uuid"
+        },
+        "upgrade_by_name": {
+          "type": "boolean",
+          "default": false
+        },
+        "name": {
+          "$ref": "#/$defs/display_name"
+        },
+        "description": {
+          "$ref": "#/$defs/description"
+        },
+        "sql": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 65535
+        },
+        "timestamp_column": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "date_partition_column": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1,
+          "maxLength": 255
+        },
+        "warehouse_connection_id": {
+          "$ref": "#/$defs/uuid"
+        },
+        "reference_url": {
+          "$ref": "#/$defs/nullable_uri"
+        },
+        "force_rebuild_always": {
+          "type": "boolean",
+          "default": false
+        },
+        "subject_types": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/source_subject_type"
+          }
+        },
+        "measures": {
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/measure"
+          }
+        },
+        "properties": {
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/property"
+          }
+        }
+      }
+    },
+    "source_subject_type": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "column_name"
+      ],
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/display_name"
+        },
+        "column_name": {
+          "$ref": "#/$defs/non_empty_string"
+        }
+      }
+    },
+    "measure": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sync_id",
+        "name",
+        "column_name",
+        "column_type"
+      ],
+      "properties": {
+        "sync_id": {
+          "$ref": "#/$defs/sync_id"
+        },
+        "name": {
+          "$ref": "#/$defs/display_name"
+        },
+        "column_name": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "column_type": {
+          "$ref": "#/$defs/warehouse_column_type"
+        },
+        "description": {
+          "$ref": "#/$defs/description"
+        }
+      }
+    },
+    "property": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sync_id",
+        "property_name",
+        "property_column",
+        "property_type"
+      ],
+      "properties": {
+        "sync_id": {
+          "$ref": "#/$defs/sync_id"
+        },
+        "property_name": {
+          "$ref": "#/$defs/display_name"
+        },
+        "property_column": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "property_type": {
+          "$ref": "#/$defs/warehouse_column_type"
+        },
+        "description": {
+          "$ref": "#/$defs/description"
+        }
+      }
+    },
+    "metric": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sync_id",
+        "name",
+        "metric_type"
+      ],
+      "properties": {
+        "sync_id": {
+          "$ref": "#/$defs/sync_id"
+        },
+        "existing_id": {
+          "$ref": "#/$defs/uuid"
+        },
+        "upgrade_by_name": {
+          "type": "boolean",
+          "default": false
+        },
+        "name": {
+          "$ref": "#/$defs/display_name"
+        },
+        "description": {
+          "$ref": "#/$defs/description"
+        },
+        "metric_type": {
+          "type": "string",
+          "enum": [
+            "simple",
+            "ratio",
+            "percentile"
+          ]
+        },
+        "format_as_percent": {
+          "type": "boolean",
+          "default": false
+        },
+        "reference_url": {
+          "$ref": "#/$defs/nullable_uri"
+        },
+        "guardrail_cutoff_threshold": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "desired_change": {
+          "type": "string",
+          "default": "METRIC_INCREASES",
+          "enum": [
+            "METRIC_INCREASES",
+            "METRIC_DECREASES"
+          ]
+        },
+        "simple_metric_aggregation": {
+          "$ref": "#/$defs/simple_metric_aggregation"
+        },
+        "ratio_metric_aggregation": {
+          "$ref": "#/$defs/ratio_metric_aggregation"
+        },
+        "percentile_metric_aggregation": {
+          "$ref": "#/$defs/percentile_metric_aggregation"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "desired_change": {
+                "const": "METRIC_INCREASES"
+              },
+              "guardrail_cutoff_threshold": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "guardrail_cutoff_threshold"
+            ]
+          },
+          "then": {
+            "properties": {
+              "guardrail_cutoff_threshold": {
+                "exclusiveMinimum": -1,
+                "exclusiveMaximum": 0
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "desired_change": {
+                "const": "METRIC_DECREASES"
+              },
+              "guardrail_cutoff_threshold": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "guardrail_cutoff_threshold",
+              "desired_change"
+            ]
+          },
+          "then": {
+            "properties": {
+              "guardrail_cutoff_threshold": {
+                "exclusiveMinimum": 0,
+                "exclusiveMaximum": 1
+              }
+            }
+          }
+        }
+      ],
+      "oneOf": [
+        {
+          "properties": {
+            "metric_type": {
+              "const": "simple"
+            }
+          },
+          "required": [
+            "simple_metric_aggregation"
+          ],
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "ratio_metric_aggregation"
+                ]
+              },
+              {
+                "required": [
+                  "percentile_metric_aggregation"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "properties": {
+            "metric_type": {
+              "const": "ratio"
+            }
+          },
+          "required": [
+            "ratio_metric_aggregation"
+          ],
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "simple_metric_aggregation"
+                ]
+              },
+              {
+                "required": [
+                  "percentile_metric_aggregation"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "properties": {
+            "metric_type": {
+              "const": "percentile"
+            }
+          },
+          "required": [
+            "percentile_metric_aggregation"
+          ],
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "simple_metric_aggregation"
+                ]
+              },
+              {
+                "required": [
+                  "ratio_metric_aggregation"
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "simple_metric_aggregation": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/aggregation_base"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "operation": {
+              "$ref": "#/$defs/simple_operation"
+            }
+          }
+        }
+      ]
+    },
+    "ratio_metric_aggregation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "numerator_aggregation",
+        "denominator_aggregation"
+      ],
+      "properties": {
+        "numerator_aggregation": {
+          "$ref": "#/$defs/ratio_component_aggregation"
+        },
+        "denominator_aggregation": {
+          "$ref": "#/$defs/ratio_component_aggregation"
+        }
+      }
+    },
+    "ratio_component_aggregation": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/aggregation_base"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "operation": {
+              "$ref": "#/$defs/ratio_component_operation"
+            }
+          }
+        }
+      ]
+    },
+    "percentile_metric_aggregation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "percentile",
+        "measure"
+      ],
+      "properties": {
+        "percentile": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "exclusiveMaximum": 1
+        },
+        "measure": {
+          "$ref": "#/$defs/measure_ref"
+        },
+        "property_filters": {
+          "$ref": "#/$defs/property_filters"
+        }
+      }
+    },
+    "aggregation_base": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operation",
+        "measure"
+      ],
+      "properties": {
+        "operation": true,
+        "measure": {
+          "$ref": "#/$defs/measure_ref"
+        },
+        "threshold_aggregation_type": {
+          "type": "string",
+          "enum": [
+            "count",
+            "sum"
+          ]
+        },
+        "threshold_comparison_operator": {
+          "type": "string",
+          "enum": [
+            "gt",
+            "gte",
+            "lt",
+            "lte",
+            "eq",
+            "neq"
+          ]
+        },
+        "threshold_breach_value": {
+          "type": "number"
+        },
+        "threshold_timeframe_value": {
+          "type": "number"
+        },
+        "threshold_timeframe_dimension": {
+          "type": "string",
+          "minLength": 1
+        },
+        "timeframe_unit": {
+          "type": "string",
+          "enum": [
+            "calendar_days",
+            "days",
+            "weeks",
+            "hours",
+            "minutes",
+            "seconds"
+          ]
+        },
+        "timeframe_start_value": {
+          "type": "number",
+          "default": 0
+        },
+        "timeframe_end_value": {
+          "type": "number"
+        },
+        "winsor_lower_percentile": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "winsor_upper_percentile": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "winsor_lower_fixed_value": {
+          "type": "number"
+        },
+        "winsor_upper_fixed_value": {
+          "type": "number"
+        },
+        "aging_threshold_days": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "enable_aging_subject_filter": {
+          "type": "boolean"
+        },
+        "property_filters": {
+          "$ref": "#/$defs/property_filters"
+        }
+      }
+    },
+    "simple_operation": {
+      "type": "string",
+      "enum": [
+        "count",
+        "sum",
+        "average",
+        "threshold",
+        "countDistinctValue",
+        "uniqueSubjects",
+        "timeTo",
+        "lastValue",
+        "firstValue"
+      ]
+    },
+    "ratio_component_operation": {
+      "type": "string",
+      "enum": [
+        "count",
+        "sum",
+        "threshold",
+        "countDistinctValue",
+        "uniqueSubjects",
+        "timeTo",
+        "lastValue",
+        "firstValue"
+      ]
+    },
+    "measure_ref": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "warehouse_metric_source_sync_id"
+      ],
+      "properties": {
+        "warehouse_metric_source_sync_tag": {
+          "$ref": "#/$defs/sync_tag"
+        },
+        "warehouse_metric_source_sync_id": {
+          "$ref": "#/$defs/sync_id"
+        },
+        "measure_sync_id": {
+          "$ref": "#/$defs/sync_id"
+        },
+        "kind": {
+          "const": "each_record"
+        },
+        "subject_type_name": {
+          "$ref": "#/$defs/display_name"
+        }
+      },
+      "oneOf": [
+        {
+          "required": [
+            "measure_sync_id"
+          ],
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "kind"
+                ]
+              },
+              {
+                "required": [
+                  "subject_type_name"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "required": [
+            "kind"
+          ],
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "measure_sync_id"
+                ]
+              },
+              {
+                "required": [
+                  "subject_type_name"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "required": [
+            "subject_type_name"
+          ],
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "measure_sync_id"
+                ]
+              },
+              {
+                "required": [
+                  "kind"
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "property_ref": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "warehouse_metric_source_sync_id",
+        "property_sync_id"
+      ],
+      "properties": {
+        "warehouse_metric_source_sync_tag": {
+          "$ref": "#/$defs/sync_tag"
+        },
+        "warehouse_metric_source_sync_id": {
+          "$ref": "#/$defs/sync_id"
+        },
+        "property_sync_id": {
+          "$ref": "#/$defs/sync_id"
+        }
+      }
+    },
+    "property_filters": {
+      "type": "array",
+      "default": [],
+      "items": {
+        "type": "array",
+        "minItems": 1,
+        "items": {
+          "$ref": "#/$defs/property_filter"
+        }
+      }
+    },
+    "property_filter": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "property",
+        "operation",
+        "values"
+      ],
+      "properties": {
+        "property": {
+          "$ref": "#/$defs/property_ref"
+        },
+        "operation": {
+          "type": "string",
+          "enum": [
+            "IS",
+            "IS_NOT"
+          ]
+        },
+        "values": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "sync_response": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "metric_sync_id",
+        "sync_tag",
+        "status",
+        "plan",
+        "created",
+        "updated",
+        "deleted",
+        "upgraded",
+        "blocked",
+        "warnings"
+      ],
+      "properties": {
+        "metric_sync_id": {
+          "$ref": "#/$defs/uuid"
+        },
+        "sync_tag": {
+          "$ref": "#/$defs/sync_tag"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "pending",
+            "success",
+            "failed",
+            "skipped",
+            "planned"
+          ]
+        },
+        "plan": {
+          "type": "boolean"
+        },
+        "payload_hash": {
+          "type": "string",
+          "minLength": 1
+        },
+        "created": {
+          "$ref": "#/$defs/diff_bucket"
+        },
+        "updated": {
+          "$ref": "#/$defs/diff_bucket"
+        },
+        "deleted": {
+          "$ref": "#/$defs/diff_bucket"
+        },
+        "upgraded": {
+          "$ref": "#/$defs/diff_bucket"
+        },
+        "blocked": {
+          "$ref": "#/$defs/diff_bucket"
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "diff_bucket": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "warehouse_metric_sources",
+        "metrics"
+      ],
+      "properties": {
+        "warehouse_metric_sources": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/diff_entry"
+          }
+        },
+        "metrics": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/diff_entry"
+          }
+        }
+      }
+    },
+    "diff_entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sync_id",
+        "id"
+      ],
+      "properties": {
+        "sync_id": {
+          "$ref": "#/$defs/sync_id"
+        },
+        "id": {
+          "$ref": "#/$defs/uuid"
+        },
+        "changes": {
+          "$ref": "#/$defs/change_set"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "affected_experiment_ids": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/uuid"
+          }
+        }
+      }
+    },
+    "change_set": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "before",
+          "after"
+        ],
+        "properties": {
+          "before": true,
+          "after": true
+        }
+      }
+    },
+    "validation_error_response": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "errors"
+      ],
+      "properties": {
+        "errors": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/validation_error"
+          }
+        }
+      }
+    },
+    "validation_error": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "object_type",
+        "message",
+        "remediation"
+      ],
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "object_type": {
+          "type": "string",
+          "enum": [
+            "sync",
+            "warehouse_metric_source",
+            "measure",
+            "property",
+            "metric"
+          ]
+        },
+        "sync_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "message": {
+          "type": "string"
+        },
+        "remediation": {
+          "type": "string"
+        },
+        "existing_object": {
+          "$ref": "#/$defs/existing_object"
+        }
+      }
+    },
+    "existing_object": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "object_type",
+        "id"
+      ],
+      "properties": {
+        "object_type": {
+          "type": "string"
+        },
+        "id": {
+          "$ref": "#/$defs/uuid"
+        },
+        "url": {
+          "type": "string",
+          "format": "uri"
+        }
+      }
+    }
+  }
+}
