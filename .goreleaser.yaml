@@ -9,7 +9,7 @@ before:
 
 builds:
   - id: metric-sync
-    main: ./cmd/metric-sync
+    main: ./cmd/metric-sync/main.go
     binary: metric-sync
     goos:
       - darwin
