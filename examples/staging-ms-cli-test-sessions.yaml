@@ -1,6 +1,6 @@
 schema_version: 1
 sync_tag: ms-cli-test-sessions
-reference_url: https://github.com/DataDog/datadog-experiment-metric-sync-cli
+reference_url: https://github.com/DataDog/experiments-metric-sync-cli
 warehouse_connection_id: 576c0bb0-df84-4044-80cf-3862b329d984
 
 options:
@@ -17,7 +17,7 @@ warehouse_metric_sources:
       FROM datadog_demo.test.SESSIONS_436BBB18
       /* metric_sync_cli_non_skip_test:20260625_001 */
     timestamp_column: EVENT_TIMESTAMP
-    reference_url: https://github.com/DataDog/datadog-experiment-metric-sync-cli
+    reference_url: https://github.com/DataDog/experiments-metric-sync-cli
     force_rebuild_always: false
     subject_types:
       - name: "[MS Seed] User"
@@ -41,7 +41,7 @@ metrics:
     description: ""
     metric_type: simple
     format_as_percent: false
-    reference_url: https://github.com/DataDog/datadog-experiment-metric-sync-cli
+    reference_url: https://github.com/DataDog/experiments-metric-sync-cli
     desired_change: METRIC_INCREASES
     simple_metric_aggregation:
       operation: sum
