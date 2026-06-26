@@ -1,4 +1,4 @@
-module github.com/DataDog/metric-sync-cli
+module github.com/DataDog/datadog-experiment-metric-sync-cli
 
 go 1.26.4
 

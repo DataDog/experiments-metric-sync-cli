@@ -7,8 +7,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/DataDog/metric-sync-cli/internal/api"
-	"github.com/DataDog/metric-sync-cli/internal/validate"
+	"github.com/DataDog/datadog-experiment-metric-sync-cli/internal/api"
+	"github.com/DataDog/datadog-experiment-metric-sync-cli/internal/validate"
 	"github.com/pterm/pterm"
 )
 
@@ -51,6 +51,16 @@ func PrintValidation(w io.Writer, issues []validate.Issue) error {
 
 func PrintOperation(w io.Writer, operation *api.Operation) error {
 	return renderMetricSync(w, operation.MetricSyncID, displayOperation(operation.OperationType), operation.Status, operation.SyncTag)
+}
+
+func PrintSubmittedOperation(w io.Writer, operation *api.Operation, idempotencyKey string) error {
+	return renderRows(w, "Metric sync", 16, []row{
+		{label: "ID", value: operation.MetricSyncID},
+		{label: "Operation", value: displayOperation(operation.OperationType)},
+		{label: "Status", value: colorStatus(operation.Status)},
+		{label: "Sync tag", value: operation.SyncTag},
+		{label: "Idempotency key", value: idempotencyKey},
+	})
 }
 
 func PrintResult(w io.Writer, result *api.Result) error {

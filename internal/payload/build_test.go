@@ -3,7 +3,7 @@ package payload
 import (
 	"testing"
 
-	"github.com/DataDog/metric-sync-cli/internal/model"
+	"github.com/DataDog/datadog-experiment-metric-sync-cli/internal/model"
 )
 
 func TestBuildMergesFiles(t *testing.T) {

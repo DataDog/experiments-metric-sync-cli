@@ -9,8 +9,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/DataDog/metric-sync-cli/internal/model"
-	"github.com/DataDog/metric-sync-cli/internal/payload"
+	"github.com/DataDog/datadog-experiment-metric-sync-cli/internal/model"
+	"github.com/DataDog/datadog-experiment-metric-sync-cli/internal/payload"
 )
 
 type Input struct {

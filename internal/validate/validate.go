@@ -5,7 +5,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/DataDog/metric-sync-cli/internal/model"
+	"github.com/DataDog/datadog-experiment-metric-sync-cli/internal/model"
 )
 
 var syncIDPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.:-]*$`)

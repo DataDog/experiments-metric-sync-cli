@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/DataDog/metric-sync-cli/internal/api"
+	"github.com/DataDog/datadog-experiment-metric-sync-cli/internal/api"
 )
 
 func TestUntilTerminalEmitsPollAndWaitEvents(t *testing.T) {

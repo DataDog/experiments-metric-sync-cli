@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-const DefaultPath = "/tmp/metric-sync-cli-output.log"
+const DefaultPath = "/tmp/datadog-experiment-metric-sync-cli-output.log"
 
 type VersionInfo struct {
 	Version string

@@ -10,16 +10,16 @@ import (
 	"strings"
 	"time"
 
-	"github.com/DataDog/metric-sync-cli/internal/api"
-	"github.com/DataDog/metric-sync-cli/internal/config"
-	"github.com/DataDog/metric-sync-cli/internal/idempotency"
-	"github.com/DataDog/metric-sync-cli/internal/logfile"
-	"github.com/DataDog/metric-sync-cli/internal/model"
-	"github.com/DataDog/metric-sync-cli/internal/output"
-	"github.com/DataDog/metric-sync-cli/internal/payload"
-	"github.com/DataDog/metric-sync-cli/internal/poll"
-	"github.com/DataDog/metric-sync-cli/internal/validate"
-	"github.com/DataDog/metric-sync-cli/internal/yamlutil"
+	"github.com/DataDog/datadog-experiment-metric-sync-cli/internal/api"
+	"github.com/DataDog/datadog-experiment-metric-sync-cli/internal/config"
+	"github.com/DataDog/datadog-experiment-metric-sync-cli/internal/idempotency"
+	"github.com/DataDog/datadog-experiment-metric-sync-cli/internal/logfile"
+	"github.com/DataDog/datadog-experiment-metric-sync-cli/internal/model"
+	"github.com/DataDog/datadog-experiment-metric-sync-cli/internal/output"
+	"github.com/DataDog/datadog-experiment-metric-sync-cli/internal/payload"
+	"github.com/DataDog/datadog-experiment-metric-sync-cli/internal/poll"
+	"github.com/DataDog/datadog-experiment-metric-sync-cli/internal/validate"
+	"github.com/DataDog/datadog-experiment-metric-sync-cli/internal/yamlutil"
 	"github.com/spf13/cobra"
 )
 
@@ -119,7 +119,7 @@ func (a *app) newRootCommand() *cobra.Command {
 		SilenceErrors: true,
 	}
 	cmd.CompletionOptions.DisableDefaultCmd = true
-	cmd.PersistentFlags().StringVar(&a.opts.site, "site", "", "Datadog site or base URL, such as datadoghq.com or https://dd.datad0g.com")
+	cmd.PersistentFlags().StringVar(&a.opts.site, "site", "", "Datadog site or base URL, such as datadoghq.com")
 	cmd.PersistentFlags().DurationVar(&a.opts.timeout, "timeout", a.opts.timeout, "overall command timeout")
 	cmd.PersistentFlags().StringVar(&a.opts.logFile, "log-file", a.opts.logFile, "debug log file path")
 
@@ -273,13 +273,13 @@ func (a *app) runSubmit(ctx context.Context, operation string, positional []stri
 	}
 	a.info("submit response", slog.Any("operation", *operationResponse))
 	if a.opts.noPoll {
-		if err := output.PrintOperation(a.stdout, operationResponse); err != nil {
+		if err := output.PrintSubmittedOperation(a.stdout, operationResponse, idempotencyKey); err != nil {
 			return a.fail(1, err)
 		}
 		return nil
 	}
 
-	if err := output.PrintOperation(a.stderr, operationResponse); err != nil {
+	if err := output.PrintSubmittedOperation(a.stderr, operationResponse, idempotencyKey); err != nil {
 		return a.fail(1, err)
 	}
 	if err := output.PrintPollingStart(a.stderr); err != nil {

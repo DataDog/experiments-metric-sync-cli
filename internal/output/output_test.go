@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/DataDog/metric-sync-cli/internal/api"
-	"github.com/DataDog/metric-sync-cli/internal/validate"
+	"github.com/DataDog/datadog-experiment-metric-sync-cli/internal/api"
+	"github.com/DataDog/datadog-experiment-metric-sync-cli/internal/validate"
 )
 
 var ansiPattern = regexp.MustCompile(`\x1b\[[0-9;]*m`)
@@ -49,6 +49,30 @@ func TestPrintOperationTextAlignsLabels(t *testing.T) {
 	assertContains(t, got, "  Operation  execute\n")
 	assertContains(t, got, "  Status     success\n")
 	assertContains(t, got, "  Sync tag   ms-cli-test-sessions\n")
+	assertNoANSI(t, got)
+}
+
+func TestPrintSubmittedOperationIncludesIdempotencyKey(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+
+	var out bytes.Buffer
+	err := PrintSubmittedOperation(&out, &api.Operation{
+		MetricSyncID:  "06a3d7fa-532d-7000-8035-562dc7c9c0f1",
+		OperationType: "plan",
+		Status:        "queued",
+		SyncTag:       "ms-cli-test-sessions",
+	}, "metric-sync-plan-ms-cli-test-sessions-abc123")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	got := out.String()
+	assertContains(t, got, "Metric sync\n")
+	assertContains(t, got, "  ID               06a3d7fa-532d-7000-8035-562dc7c9c0f1\n")
+	assertContains(t, got, "  Operation        plan\n")
+	assertContains(t, got, "  Status           queued\n")
+	assertContains(t, got, "  Sync tag         ms-cli-test-sessions\n")
+	assertContains(t, got, "  Idempotency key  metric-sync-plan-ms-cli-test-sessions-abc123\n")
 	assertNoANSI(t, got)
 }
 
