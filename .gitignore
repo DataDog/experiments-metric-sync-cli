@@ -1,5 +1,5 @@
 metric-sync
-metric-sync.log
+metric-sync*.log
 dist/
 coverage.out
 .DS_Store

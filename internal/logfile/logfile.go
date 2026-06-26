@@ -4,11 +4,12 @@ import (
 	"context"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 )
 
-const DefaultPath = "/tmp/datadog-experiment-metric-sync-cli-output.log"
+var DefaultPath = filepath.Join(os.TempDir(), "metric-sync-debug.log")
 
 type VersionInfo struct {
 	Version string

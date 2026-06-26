@@ -9,7 +9,6 @@ import (
 
 	"github.com/DataDog/datadog-experiment-metric-sync-cli/internal/api"
 	"github.com/DataDog/datadog-experiment-metric-sync-cli/internal/validate"
-	"github.com/pterm/pterm"
 )
 
 func PrintDiscovered(w io.Writer, files []string) error {
@@ -165,7 +164,7 @@ func renderRows(w io.Writer, title string, labelWidth int, rows []row) error {
 }
 
 func heading(value string) string {
-	return style(value, pterm.Bold)
+	return style("1", value)
 }
 
 func colorStatus(status string) string {
@@ -191,19 +190,19 @@ func colorNonZero(value int) string {
 }
 
 func colorGreen(value string) string {
-	return style(value, pterm.FgGreen)
+	return style("32", value)
 }
 
 func colorCyan(value string) string {
-	return style(value, pterm.FgCyan)
+	return style("36", value)
 }
 
 func colorYellow(value string) string {
-	return style(value, pterm.FgYellow)
+	return style("33", value)
 }
 
 func colorRed(value string) string {
-	return style(value, pterm.FgRed)
+	return style("31", value)
 }
 
 func formatDuration(duration time.Duration) string {
@@ -220,12 +219,11 @@ func formatElapsed(duration time.Duration) string {
 	return duration.Truncate(time.Second).String()
 }
 
-func style(value string, colors ...pterm.Color) string {
+func style(code string, value string) string {
 	if os.Getenv("NO_COLOR") != "" {
 		return value
 	}
-	pterm.EnableColor()
-	return pterm.Style(colors).Sprint(value)
+	return "\033[" + code + "m" + value + "\033[0m"
 }
 
 type summary struct {
