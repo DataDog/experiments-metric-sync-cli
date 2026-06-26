@@ -7,8 +7,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/DataDog/datadog-experiment-metric-sync-cli/internal/api"
-	"github.com/DataDog/datadog-experiment-metric-sync-cli/internal/validate"
+	"github.com/DataDog/experiments-metric-sync-cli/internal/api"
+	"github.com/DataDog/experiments-metric-sync-cli/internal/validate"
 )
 
 func PrintDiscovered(w io.Writer, files []string) error {

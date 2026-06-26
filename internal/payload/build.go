@@ -3,7 +3,7 @@ package payload
 import (
 	"fmt"
 
-	"github.com/DataDog/datadog-experiment-metric-sync-cli/internal/model"
+	"github.com/DataDog/experiments-metric-sync-cli/internal/model"
 )
 
 type SubmitOptions struct {

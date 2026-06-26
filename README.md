@@ -1,6 +1,6 @@
-# Datadog Experiment Metric Sync CLI
+# Datadog Experiments Metric Sync CLI
 
-Datadog Experiment Metric Sync CLI prepares metric sync definitions, submits them to Datadog's Metric Sync API, polls the async operation, and prints CI-friendly results.
+Datadog Experiments Metric Sync CLI prepares metric sync definitions, submits them to Datadog's Metric Sync API, polls the async operation, and prints CI-friendly results.
 
 
 ## Authentication

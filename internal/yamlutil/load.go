@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/DataDog/datadog-experiment-metric-sync-cli/internal/model"
+	"github.com/DataDog/experiments-metric-sync-cli/internal/model"
 	"gopkg.in/yaml.v3"
 )
 

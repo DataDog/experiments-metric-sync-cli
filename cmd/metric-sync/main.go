@@ -3,7 +3,7 @@ package main
 import (
 	"os"
 
-	"github.com/DataDog/datadog-experiment-metric-sync-cli/internal/cli"
+	"github.com/DataDog/experiments-metric-sync-cli/internal/cli"
 )
 
 var (

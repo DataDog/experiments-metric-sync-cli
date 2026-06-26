@@ -13,9 +13,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/DataDog/datadog-experiment-metric-sync-cli/internal/config"
-	"github.com/DataDog/datadog-experiment-metric-sync-cli/internal/model"
-	"github.com/DataDog/datadog-experiment-metric-sync-cli/internal/payload"
+	"github.com/DataDog/experiments-metric-sync-cli/internal/config"
+	"github.com/DataDog/experiments-metric-sync-cli/internal/model"
+	"github.com/DataDog/experiments-metric-sync-cli/internal/payload"
 )
 
 type Client struct {

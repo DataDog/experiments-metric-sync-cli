@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/DataDog/datadog-experiment-metric-sync-cli/internal/config"
+	"github.com/DataDog/experiments-metric-sync-cli/internal/config"
 )
 
 func TestGetStatusDecodesJSONAPIEnvelope(t *testing.T) {

@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/DataDog/datadog-experiment-metric-sync-cli/internal/logfile"
+	"github.com/DataDog/experiments-metric-sync-cli/internal/logfile"
 )
 
 func TestDefaultLogPathUsesTmp(t *testing.T) {

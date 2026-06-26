@@ -5,7 +5,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/DataDog/datadog-experiment-metric-sync-cli/internal/api"
+	"github.com/DataDog/experiments-metric-sync-cli/internal/api"
 )
 
 type StatusClient interface {
