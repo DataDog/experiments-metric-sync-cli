@@ -1,0 +1,75 @@
+version: 2
+
+project_name: metric-sync
+
+before:
+  hooks:
+    - go mod tidy
+    - go mod verify
+
+builds:
+  - id: metric-sync
+    main: ./cmd/metric-sync
+    binary: metric-sync
+    goos:
+      - darwin
+      - linux
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      - goos: windows
+        goarch: arm64
+    env:
+      - CGO_ENABLED=0
+    ldflags:
+      - -s -w
+      - -X main.version={{ .Version }}
+      - -X main.commit={{ .Commit }}
+      - -X main.date={{ .Date }}
+
+archives:
+  - id: default
+    ids:
+      - metric-sync
+    formats:
+      - tar.gz
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
+    name_template: "{{ .ProjectName }}-{{ .Os }}-{{ .Arch }}"
+    files:
+      - LICENSE
+      - NOTICE
+
+checksum:
+  name_template: "checksums.txt"
+  algorithm: sha256
+
+release:
+  draft: false
+  prerelease: auto
+  footer: |
+    ## Installation
+
+    Download the archive for your platform from this release, unpack it, and put `metric-sync` on your `PATH`.
+
+    Example for macOS/Linux:
+
+    ```bash
+    tar -xzf metric-sync-<os>-<arch>.tar.gz
+    chmod +x metric-sync
+    ./metric-sync version
+    ```
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+      - "Merge pull request"
+      - "Merge branch"

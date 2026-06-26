@@ -35,3 +35,15 @@ re-running the same file starts a new operation instead of replaying an old one.
 
 Use `--idempotency-key` only when you intentionally want to replay or debug a
 specific request.
+
+## Releases
+
+GitHub Releases are created with GoReleaser when a version tag is pushed:
+
+```sh
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+The release workflow runs tests, builds `metric-sync` for macOS, Linux, and
+Windows, and publishes archives plus SHA-256 checksums to the GitHub Release.
