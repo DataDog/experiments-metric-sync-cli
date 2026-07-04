@@ -1,0 +1,12 @@
+Component,Origin,License,Copyright
+github.com/cpuguy83/go-md2man/v2 v2.0.6,https://github.com/cpuguy83/go-md2man,MIT,Copyright (c) 2014 Brian Goff
+github.com/inconshreveable/mousetrap v1.1.0,https://github.com/inconshreveable/mousetrap,Apache-2.0,Copyright The mousetrap contributors
+github.com/kr/pretty v0.1.0,https://github.com/kr/pretty,MIT,Copyright 2012 Keith Rarick
+github.com/kr/pty v1.1.1,https://github.com/kr/pty,MIT,Copyright 2011 Keith Rarick
+github.com/kr/text v0.1.0,https://github.com/kr/text,MIT,Copyright 2012 Keith Rarick
+github.com/russross/blackfriday/v2 v2.1.0,https://github.com/russross/blackfriday,BSD-2-Clause,Copyright (c) 2011 Russ Ross
+github.com/spf13/cobra v1.10.2,https://github.com/spf13/cobra,Apache-2.0,Copyright 2013-2023 The Cobra Authors
+github.com/spf13/pflag v1.0.9,https://github.com/spf13/pflag,BSD-3-Clause,Copyright (c) 2012 Alex Ogier; Copyright (c) 2012 The Go Authors
+go.yaml.in/yaml/v3 v3.0.4,https://go.yaml.in/yaml/v3,Apache-2.0 AND MIT,Copyright (c) 2006-2011 Kirill Simonov; Copyright (c) 2011-2019 Canonical Ltd
+gopkg.in/check.v1 v1.0.0-20190902080502-41f04d3bba15,https://gopkg.in/check.v1,BSD-2-Clause,Copyright (c) 2010-2013 Gustavo Niemeyer
+gopkg.in/yaml.v3 v3.0.1,https://gopkg.in/yaml.v3,Apache-2.0 AND MIT,Copyright (c) 2006-2011 Kirill Simonov; Copyright (c) 2011-2019 Canonical Ltd

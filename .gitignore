@@ -1,0 +1,9 @@
+/metric-sync
+/metric-sync*.log
+dist/
+coverage.out
+.DS_Store
+plans/
+/.idea/
+/.claude/
+/.oss-readiness/

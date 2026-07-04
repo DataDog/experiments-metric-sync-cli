@@ -1,0 +1,52 @@
+schema_version: 1
+sync_tag: ms-cli-test-sessions
+reference_url: https://github.com/DataDog/experiments-metric-sync-cli
+warehouse_connection_id: 576c0bb0-df84-4044-80cf-3862b329d984
+
+options:
+  is_certified: false
+  upgrade_mode: none
+  force_delete: false
+
+warehouse_metric_sources:
+  - sync_id: sf-sessions
+    name: "[MS CLI Test] SF Sessions"
+    description: ""
+    sql: |
+      SELECT USER_ID, EVENT_TIMESTAMP, SESSION_DURATION, PAGES_VIEWED
+      FROM datadog_demo.test.SESSIONS_436BBB18
+      /* metric_sync_cli_non_skip_test:20260625_001 */
+    timestamp_column: EVENT_TIMESTAMP
+    reference_url: https://github.com/DataDog/experiments-metric-sync-cli
+    force_rebuild_always: false
+    subject_types:
+      - name: "[MS Seed] User"
+        column_name: USER_ID
+    measures:
+      - sync_id: pages_viewed
+        name: pages_viewed
+        column_name: PAGES_VIEWED
+        column_type: INTEGER
+        description: ""
+      - sync_id: session_duration
+        name: session_duration
+        column_name: SESSION_DURATION
+        column_type: FLOAT
+        description: ""
+    properties: []
+
+metrics:
+  - sync_id: sf-pages-viewed
+    name: "[MS CLI Test] SF Pages Viewed"
+    description: ""
+    metric_type: simple
+    format_as_percent: false
+    reference_url: https://github.com/DataDog/experiments-metric-sync-cli
+    desired_change: METRIC_INCREASES
+    simple_metric_aggregation:
+      operation: sum
+      measure:
+        warehouse_metric_source_sync_id: sf-sessions
+        measure_sync_id: pages_viewed
+      timeframe_start_value: 0
+      property_filters: []
