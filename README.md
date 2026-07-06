@@ -1,6 +1,6 @@
 # Datadog Experiments Metric Sync CLI
 
-Datadog Experiments Metric Sync CLI prepares metric sync definitions, submits them to Datadog's Metric Sync API, polls the async operation, and prints CI-friendly results.
+Datadog Experiments Metric Sync CLI prepares metric sync definitions, submits them to Datadog's Metric Sync API, polls the async operation, and prints the results.
 
 
 ## Authentication
@@ -15,16 +15,37 @@ export DD_SITE=datadoghq.com (optional)
 
 ## Usage
 
+By default, the CLI sends requests to `datadoghq.com`.
+
+In CI, run `plan` first to validate the metric definitions and preview the diff:
+
 ```sh
-metric-sync plan examples/
-metric-sync execute examples/
-metric-sync status <metric_sync_id>
-metric-sync result <metric_sync_id>
+metric-sync plan ./metrics
 ```
 
-`plan` and `execute` both discover and validate YAML before calling Datadog. Use
-`validate` only when you want a local validation check without submitting an
-operation.
+Then run `execute` when you are ready to apply the changes:
+
+```sh
+metric-sync execute ./metrics
+```
+
+`execute` discovers metric sync YAML files, validates them locally, submits a
+write operation to the Metric Sync API, polls until the operation reaches a
+terminal state, and prints the created, updated, deleted, upgraded, blocked, and
+error counts.
+
+Other commands:
+
+```sh
+metric-sync validate ./metrics
+metric-sync status <metric_sync_id>
+metric-sync result <metric_sync_id>
+metric-sync version
+```
+
+`validate` only performs local validation and does not call Datadog. `status`
+checks an operation by ID. `result` fetches the terminal plan or execute result.
+`version` prints build metadata.
 
 ## Idempotency
 
@@ -35,15 +56,3 @@ re-running the same file starts a new operation instead of replaying an old one.
 
 Use `--idempotency-key` only when you intentionally want to replay or debug a
 specific request.
-
-## Releases
-
-GitHub Releases are created with GoReleaser when a version tag is pushed:
-
-```sh
-git tag v0.1.0
-git push origin v0.1.0
-```
-
-The release workflow runs tests, builds `metric-sync` for macOS, Linux, and
-Windows, and publishes archives plus SHA-256 checksums to the GitHub Release.
