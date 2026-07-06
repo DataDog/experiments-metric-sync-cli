@@ -3,6 +3,24 @@
 Datadog Experiments Metric Sync CLI prepares metric sync definitions, submits them to Datadog's Metric Sync API, polls the async operation, and prints the results.
 
 
+## Installation
+
+Install the latest release:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/DataDog/experiments-metric-sync-cli/main/install.sh | sh
+```
+
+The install script detects macOS or Linux, downloads the matching GitHub Release
+archive, verifies it against the published SHA-256 checksum, and installs
+`metric-sync` to `/usr/local/bin`.
+
+To install a specific version or install into a different directory:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/DataDog/experiments-metric-sync-cli/main/install.sh | env VERSION=v0.1.0 INSTALL_DIR="$HOME/.local/bin" sh
+```
+
 ## Authentication
 
 Set Datadog API credentials through environment variables:
