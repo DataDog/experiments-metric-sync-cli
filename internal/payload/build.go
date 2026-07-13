@@ -50,7 +50,7 @@ func Build(files []model.FileConfig) (model.SyncConfig, SubmitOptions, error) {
 		} else if config.WarehouseConnectionID != "" && config.WarehouseConnectionID != result.WarehouseConnectionID {
 			return model.SyncConfig{}, SubmitOptions{}, fmt.Errorf("%s: warehouse_connection_id does not match the first file", file.Path)
 		}
-		if config.Options.WithDefaults() != options {
+		if !config.Options.EqualWithDefaults(options) {
 			return model.SyncConfig{}, SubmitOptions{}, fmt.Errorf("%s: options must match across all files in one operation", file.Path)
 		}
 		result.WarehouseMetricSources = append(result.WarehouseMetricSources, config.WarehouseMetricSources...)
@@ -58,7 +58,7 @@ func Build(files []model.FileConfig) (model.SyncConfig, SubmitOptions, error) {
 	}
 
 	return result, SubmitOptions{
-		IsCertified: options.IsCertified,
+		IsCertified: options.Certified(),
 		UpgradeMode: options.UpgradeMode,
 		ForceDelete: options.ForceDelete,
 	}, nil
