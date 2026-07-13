@@ -5,16 +5,32 @@
 package model
 
 type Options struct {
-	IsCertified bool   `json:"-" yaml:"is_certified,omitempty"`
+	IsCertified *bool  `json:"-" yaml:"is_certified,omitempty"`
 	UpgradeMode string `json:"-" yaml:"upgrade_mode,omitempty"`
 	ForceDelete bool   `json:"-" yaml:"force_delete,omitempty"`
 }
 
 func (o Options) WithDefaults() Options {
+	if o.IsCertified == nil {
+		isCertified := true
+		o.IsCertified = &isCertified
+	}
 	if o.UpgradeMode == "" {
 		o.UpgradeMode = "none"
 	}
 	return o
+}
+
+func (o Options) Certified() bool {
+	return *o.WithDefaults().IsCertified
+}
+
+func (o Options) EqualWithDefaults(other Options) bool {
+	left := o.WithDefaults()
+	right := other.WithDefaults()
+	return left.Certified() == right.Certified() &&
+		left.UpgradeMode == right.UpgradeMode &&
+		left.ForceDelete == right.ForceDelete
 }
 
 type SyncConfig struct {

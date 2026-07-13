@@ -47,6 +47,9 @@ func TestBuildMergesFiles(t *testing.T) {
 	if options.UpgradeMode != "by_id" {
 		t.Fatalf("got upgrade mode %q", options.UpgradeMode)
 	}
+	if !options.IsCertified {
+		t.Fatal("expected omitted is_certified to default to true")
+	}
 }
 
 func TestBuildRejectsMismatchedSyncTag(t *testing.T) {
@@ -56,5 +59,34 @@ func TestBuildRejectsMismatchedSyncTag(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatal("expected mismatch error")
+	}
+}
+
+func TestBuildAllowsExplicitUncertified(t *testing.T) {
+	isCertified := false
+	_, options, err := Build([]model.FileConfig{{
+		Path: "metric.yaml",
+		Config: model.SyncConfig{
+			SchemaVersion: 1,
+			SyncTag:       "checkout",
+			Options:       model.Options{IsCertified: &isCertified},
+		},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if options.IsCertified {
+		t.Fatal("expected explicit is_certified=false to be preserved")
+	}
+}
+
+func TestBuildRejectsMismatchedCertifiedOptions(t *testing.T) {
+	isCertified := false
+	_, _, err := Build([]model.FileConfig{
+		{Path: "one.yaml", Config: model.SyncConfig{SchemaVersion: 1, SyncTag: "checkout"}},
+		{Path: "two.yaml", Config: model.SyncConfig{SchemaVersion: 1, SyncTag: "checkout", Options: model.Options{IsCertified: &isCertified}}},
+	})
+	if err == nil {
+		t.Fatal("expected options mismatch error")
 	}
 }
