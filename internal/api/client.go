@@ -121,12 +121,37 @@ func (c *Client) GetResult(ctx context.Context, metricSyncID string) (*Result, e
 	return &result, nil
 }
 
+func (c *Client) ListWarehouseConnections(ctx context.Context) ([]WarehouseConnection, error) {
+	endpoint := c.baseURL + "/api/unstable/ffe/warehouse-connections"
+	c.info("warehouse connections request", slog.String("endpoint", endpoint))
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, err
+	}
+	c.addAuthHeaders(httpReq)
+	httpReq.Header.Set("Accept", "application/json")
+
+	body, err := c.doRaw(httpReq)
+	if err != nil {
+		return nil, err
+	}
+	return decodeWarehouseConnections(body)
+}
+
 func (c *Client) addAuthHeaders(req *http.Request) {
 	req.Header.Set("DD-API-KEY", c.apiKey)
 	req.Header.Set("DD-APPLICATION-KEY", c.appKey)
 }
 
 func (c *Client) do(req *http.Request, output any) error {
+	body, err := c.doRaw(req)
+	if err != nil {
+		return err
+	}
+	return decodeData(body, output)
+}
+
+func (c *Client) doRaw(req *http.Request) ([]byte, error) {
 	start := time.Now()
 	c.info("http request",
 		slog.String("method", req.Method),
@@ -139,7 +164,7 @@ func (c *Client) do(req *http.Request, output any) error {
 			slog.String("url", req.URL.String()),
 			slog.Any("error", err),
 		)
-		return err
+		return nil, err
 	}
 	defer resp.Body.Close()
 
@@ -151,7 +176,7 @@ func (c *Client) do(req *http.Request, output any) error {
 			slog.Int("status", resp.StatusCode),
 			slog.Any("error", err),
 		)
-		return err
+		return nil, err
 	}
 	c.info("http response",
 		slog.String("method", req.Method),
@@ -163,14 +188,14 @@ func (c *Client) do(req *http.Request, output any) error {
 
 	if resp.StatusCode == http.StatusAccepted && req.Method == http.MethodGet && strings.HasSuffix(req.URL.Path, "/result") {
 		pendingMessage := decodePendingMessage(body)
-		return &ResultNotReadyError{RetryAfter: resp.Header.Get("Retry-After"), Message: pendingMessage}
+		return nil, &ResultNotReadyError{RetryAfter: resp.Header.Get("Retry-After"), Message: pendingMessage}
 	}
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return decodeAPIError(resp.StatusCode, body)
+		return nil, decodeAPIError(resp.StatusCode, body)
 	}
 
-	return decodeData(body, output)
+	return body, nil
 }
 
 func (c *Client) info(message string, attrs ...slog.Attr) {
@@ -214,6 +239,32 @@ func decodeData(body []byte, output any) error {
 		}
 	}
 	return nil
+}
+
+func decodeWarehouseConnections(body []byte) ([]WarehouseConnection, error) {
+	var envelope struct {
+		Data []struct {
+			ID         string          `json:"id"`
+			Attributes json.RawMessage `json:"attributes"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(body, &envelope); err != nil {
+		return nil, fmt.Errorf("decode response envelope: %w", err)
+	}
+	connections := make([]WarehouseConnection, 0, len(envelope.Data))
+	for _, item := range envelope.Data {
+		var connection WarehouseConnection
+		if len(item.Attributes) > 0 {
+			if err := json.Unmarshal(item.Attributes, &connection); err != nil {
+				return nil, fmt.Errorf("decode warehouse connection attributes: %w", err)
+			}
+		}
+		if connection.ID == "" {
+			connection.ID = item.ID
+		}
+		connections = append(connections, connection)
+	}
+	return connections, nil
 }
 
 func decodeAPIError(statusCode int, body []byte) error {

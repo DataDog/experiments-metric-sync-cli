@@ -93,6 +93,45 @@ func TestEmptyErrorBodyReturnsUsefulError(t *testing.T) {
 	}
 }
 
+func TestListWarehouseConnectionsDecodesJSONAPIEnvelope(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/unstable/ffe/warehouse-connections" {
+			t.Fatalf("got path %q", r.URL.Path)
+		}
+		if got := r.Header.Get("DD-API-KEY"); got != "api" {
+			t.Fatalf("missing api key header")
+		}
+		if got := r.Header.Get("DD-APPLICATION-KEY"); got != "app" {
+			t.Fatalf("missing app key header")
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"data": []map[string]any{
+				{
+					"id":   "connection-id",
+					"type": "warehouse-connections",
+					"attributes": map[string]any{
+						"name":   "Warehouse",
+						"engine": "SNOWFLAKE",
+					},
+				},
+			},
+		})
+	}))
+	defer server.Close()
+
+	client := NewClient(config.Config{BaseURL: server.URL, APIKey: "api", AppKey: "app"})
+	got, err := client.ListWarehouseConnections(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("got %d connections, want 1", len(got))
+	}
+	if got[0].ID != "connection-id" || got[0].Name != "Warehouse" || got[0].Engine != "SNOWFLAKE" {
+		t.Fatalf("unexpected connection: %#v", got[0])
+	}
+}
+
 type recordingLogger struct {
 	messages []string
 	entries  []recordingEntry
