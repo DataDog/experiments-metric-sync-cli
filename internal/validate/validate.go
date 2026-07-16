@@ -52,18 +52,6 @@ func validateConfig(file string, config model.SyncConfig) []Issue {
 	} else if !syncIDPattern.MatchString(config.SyncTag) {
 		add("sync_tag", "must start with an alphanumeric character and contain only alphanumeric, underscore, dot, colon, or dash characters")
 	}
-	if config.WarehouseConnectionID == "" && len(config.WarehouseMetricSources) > 0 {
-		needsConnection := false
-		for _, source := range config.WarehouseMetricSources {
-			if source.WarehouseConnectionID == "" {
-				needsConnection = true
-				break
-			}
-		}
-		if needsConnection {
-			add("warehouse_connection_id", "is required when sources omit warehouse_connection_id")
-		}
-	}
 	for i, source := range config.WarehouseMetricSources {
 		validateSource(add, fmt.Sprintf("warehouse_metric_sources[%d]", i), source)
 	}

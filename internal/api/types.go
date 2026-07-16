@@ -39,6 +39,12 @@ type Result struct {
 	Errors       []Issue    `json:"errors,omitempty"`
 }
 
+type WarehouseConnection struct {
+	ID     string `json:"id"`
+	Name   string `json:"name,omitempty"`
+	Engine string `json:"engine,omitempty"`
+}
+
 type DiffBucket struct {
 	WarehouseMetricSources []DiffEntry `json:"warehouse_metric_sources"`
 	Metrics                []DiffEntry `json:"metrics"`

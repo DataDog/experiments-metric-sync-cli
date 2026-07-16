@@ -243,6 +243,20 @@ func (a *app) runSubmit(ctx context.Context, operation string, positional []stri
 	if err != nil {
 		return a.fail(1, err)
 	}
+	cfg, err := config.Load(config.Options{SiteOverride: a.opts.site})
+	if err != nil {
+		return a.fail(1, err)
+	}
+	a.info("loaded config", slog.Any("config", config.Redacted(cfg)))
+	client := api.NewClientWithLogger(cfg, a.logger)
+
+	submitCtx, cancel := context.WithTimeout(ctx, a.opts.timeout)
+	defer cancel()
+
+	if err := a.resolveWarehouseConnection(submitCtx, client, &request); err != nil {
+		return a.fail(1, err)
+	}
+
 	idempotencyKey := a.opts.idempotencyKey
 	if idempotencyKey == "" {
 		idempotencyKey, err = idempotency.Derive(idempotency.Input{
@@ -258,18 +272,9 @@ func (a *app) runSubmit(ctx context.Context, operation string, positional []stri
 		slog.String("operation", operation),
 		slog.String("sync_tag", request.SyncTag),
 		slog.String("idempotency_key", idempotencyKey),
+		slog.String("warehouse_connection_id", request.WarehouseConnectionID),
 		slog.Any("options", submitOptions),
 	)
-
-	cfg, err := config.Load(config.Options{SiteOverride: a.opts.site})
-	if err != nil {
-		return a.fail(1, err)
-	}
-	a.info("loaded config", slog.Any("config", config.Redacted(cfg)))
-	client := api.NewClientWithLogger(cfg, a.logger)
-
-	submitCtx, cancel := context.WithTimeout(ctx, a.opts.timeout)
-	defer cancel()
 
 	operationResponse, err := client.Submit(submitCtx, operation, request, submitOptions, idempotencyKey)
 	if err != nil {
@@ -309,6 +314,43 @@ func (a *app) runSubmit(ctx context.Context, operation string, positional []stri
 		return exitError{code: 1}
 	}
 	return nil
+}
+
+func (a *app) resolveWarehouseConnection(ctx context.Context, client *api.Client, request *model.SyncConfig) error {
+	if !needsWarehouseConnectionResolution(*request) {
+		return nil
+	}
+
+	connections, err := client.ListWarehouseConnections(ctx)
+	if err != nil {
+		return fmt.Errorf("resolve warehouse connection: %w", err)
+	}
+	switch len(connections) {
+	case 0:
+		return fmt.Errorf("no warehouse connection is configured for this organization")
+	case 1:
+		request.WarehouseConnectionID = connections[0].ID
+		a.info("resolved warehouse connection",
+			slog.String("warehouse_connection_id", connections[0].ID),
+			slog.String("name", connections[0].Name),
+			slog.String("engine", connections[0].Engine),
+		)
+		return nil
+	default:
+		return fmt.Errorf("multiple warehouse connections are configured for this organization; set warehouse_connection_id in the YAML to choose one")
+	}
+}
+
+func needsWarehouseConnectionResolution(request model.SyncConfig) bool {
+	if request.WarehouseConnectionID != "" {
+		return false
+	}
+	for _, source := range request.WarehouseMetricSources {
+		if source.WarehouseConnectionID == "" {
+			return true
+		}
+	}
+	return false
 }
 
 func (a *app) runStatus(ctx context.Context, metricSyncID string) error {

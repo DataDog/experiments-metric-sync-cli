@@ -1,7 +1,6 @@
 schema_version: 1
 sync_tag: example-checkout
 reference_url: https://github.com/DataDog/experiments-metric-sync-cli
-warehouse_connection_id: 00000000-0000-0000-0000-000000000000
 warehouse_metric_sources:
   - sync_id: checkout_events
     name: Checkout events
