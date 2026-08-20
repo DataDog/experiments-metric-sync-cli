@@ -98,10 +98,15 @@ func validateMetric(add func(string, string), path string, metric model.Metric) 
 	case "simple":
 		if metric.SimpleMetricAggregation == nil {
 			add(path+".simple_metric_aggregation", "is required when metric_type is simple")
+		} else {
+			validateAggregation(add, path+".simple_metric_aggregation", metric.SimpleMetricAggregation)
 		}
 	case "ratio":
 		if metric.RatioMetricAggregation == nil {
 			add(path+".ratio_metric_aggregation", "is required when metric_type is ratio")
+		} else {
+			validateAggregation(add, path+".ratio_metric_aggregation.numerator", &metric.RatioMetricAggregation.Numerator)
+			validateAggregation(add, path+".ratio_metric_aggregation.denominator", &metric.RatioMetricAggregation.Denominator)
 		}
 	case "percentile":
 		if metric.PercentileMetricAggregation == nil {
@@ -110,6 +115,26 @@ func validateMetric(add func(string, string), path string, metric model.Metric) 
 	default:
 		add(path+".metric_type", "must be simple, ratio, or percentile")
 	}
+}
+
+func validateAggregation(add func(string, string), path string, agg *model.SimpleMetricAggregation) {
+	if agg == nil {
+		return
+	}
+	if agg.Operation != "threshold" {
+		return
+	}
+	require(add, path+".threshold_aggregation_type", agg.ThresholdAggregationType)
+	if agg.ThresholdAggregationType != "" && !oneOf(agg.ThresholdAggregationType, "count", "sum") {
+		add(path+".threshold_aggregation_type", "must be count or sum")
+	}
+	require(add, path+".threshold_comparison_operator", agg.ThresholdComparisonOperator)
+	if agg.ThresholdComparisonOperator != "" && !oneOf(agg.ThresholdComparisonOperator, "gt", "gte", "lt", "lte", "eq", "neq") {
+		add(path+".threshold_comparison_operator", "must be gt, gte, lt, lte, eq, or neq")
+	}
+	requireFloat(add, path+".threshold_breach_value", agg.ThresholdBreachValue)
+	requireFloat(add, path+".threshold_timeframe_value", agg.ThresholdTimeframeValue)
+	require(add, path+".threshold_timeframe_dimension", agg.ThresholdTimeframeDimension)
 }
 
 func validateCombined(files []model.FileConfig) []Issue {
@@ -200,6 +225,12 @@ func validateMeasureRef(add func(string, string, string), file string, path stri
 
 func require(add func(string, string), path string, value string) {
 	if strings.TrimSpace(value) == "" {
+		add(path, "is required")
+	}
+}
+
+func requireFloat(add func(string, string), path string, value *float64) {
+	if value == nil {
 		add(path, "is required")
 	}
 }

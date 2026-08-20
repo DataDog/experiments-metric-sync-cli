@@ -106,6 +106,12 @@ type SimpleMetricAggregation struct {
 	WinsorUpperPercentile *float64         `json:"winsor_upper_percentile,omitempty" yaml:"winsor_upper_percentile,omitempty"`
 	WinsorLowerFixedValue *float64         `json:"winsor_lower_fixed_value,omitempty" yaml:"winsor_lower_fixed_value,omitempty"`
 	WinsorUpperFixedValue *float64         `json:"winsor_upper_fixed_value,omitempty" yaml:"winsor_upper_fixed_value,omitempty"`
+	// Threshold aggregation fields, required when operation is "threshold".
+	ThresholdAggregationType    string   `json:"threshold_aggregation_type,omitempty" yaml:"threshold_aggregation_type,omitempty"`
+	ThresholdComparisonOperator string   `json:"threshold_comparison_operator,omitempty" yaml:"threshold_comparison_operator,omitempty"`
+	ThresholdBreachValue        *float64 `json:"threshold_breach_value,omitempty" yaml:"threshold_breach_value,omitempty"`
+	ThresholdTimeframeValue     *float64 `json:"threshold_timeframe_value,omitempty" yaml:"threshold_timeframe_value,omitempty"`
+	ThresholdTimeframeDimension string   `json:"threshold_timeframe_dimension,omitempty" yaml:"threshold_timeframe_dimension,omitempty"`
 }
 
 type RatioMetricAggregation struct {

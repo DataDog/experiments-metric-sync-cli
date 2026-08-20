@@ -90,3 +90,47 @@ func TestBuildRejectsMismatchedCertifiedOptions(t *testing.T) {
 		t.Fatal("expected options mismatch error")
 	}
 }
+
+func TestBuildPreservesThresholdFields(t *testing.T) {
+	breach := 10.0
+	timeframe := 7.0
+	files := []model.FileConfig{{
+		Path: "threshold.yaml",
+		Config: model.SyncConfig{
+			SchemaVersion: 1,
+			SyncTag:       "checkout",
+			Metrics: []model.Metric{{
+				SyncID:     "metric",
+				Name:       "metric",
+				MetricType: "simple",
+				SimpleMetricAggregation: &model.SimpleMetricAggregation{
+					Operation:                   "threshold",
+					Measure:                     model.MeasureRef{MeasureSyncID: "m", WarehouseMetricSourceSyncID: "src"},
+					ThresholdAggregationType:    "count",
+					ThresholdComparisonOperator: "gt",
+					ThresholdBreachValue:        &breach,
+					ThresholdTimeframeValue:     &timeframe,
+					ThresholdTimeframeDimension: "days",
+				},
+			}},
+		},
+	}}
+
+	got, _, err := Build(files)
+	if err != nil {
+		t.Fatal(err)
+	}
+	agg := got.Metrics[0].SimpleMetricAggregation
+	if agg.Operation != "threshold" {
+		t.Fatalf("operation = %q, want threshold", agg.Operation)
+	}
+	if agg.ThresholdAggregationType != "count" || agg.ThresholdComparisonOperator != "gt" || agg.ThresholdTimeframeDimension != "days" {
+		t.Fatalf("threshold fields not preserved: %#v", agg)
+	}
+	if agg.ThresholdBreachValue == nil || *agg.ThresholdBreachValue != 10 {
+		t.Fatalf("threshold_breach_value = %v, want 10", agg.ThresholdBreachValue)
+	}
+	if agg.ThresholdTimeframeValue == nil || *agg.ThresholdTimeframeValue != 7 {
+		t.Fatalf("threshold_timeframe_value = %v, want 7", agg.ThresholdTimeframeValue)
+	}
+}
