@@ -105,8 +105,8 @@ func validateMetric(add func(string, string), path string, metric model.Metric) 
 		if metric.RatioMetricAggregation == nil {
 			add(path+".ratio_metric_aggregation", "is required when metric_type is ratio")
 		} else {
-			validateAggregation(add, path+".ratio_metric_aggregation.numerator", &metric.RatioMetricAggregation.Numerator)
-			validateAggregation(add, path+".ratio_metric_aggregation.denominator", &metric.RatioMetricAggregation.Denominator)
+			validateAggregation(add, path+".ratio_metric_aggregation.numerator_aggregation", &metric.RatioMetricAggregation.NumeratorAggregation)
+			validateAggregation(add, path+".ratio_metric_aggregation.denominator_aggregation", &metric.RatioMetricAggregation.DenominatorAggregation)
 		}
 	case "percentile":
 		if metric.PercentileMetricAggregation == nil {
@@ -122,6 +122,7 @@ func validateAggregation(add func(string, string), path string, agg *model.Simpl
 		return
 	}
 	if agg.Operation != "threshold" {
+		validateNoThresholdFields(add, path, agg)
 		return
 	}
 	require(add, path+".threshold_aggregation_type", agg.ThresholdAggregationType)
@@ -133,8 +134,51 @@ func validateAggregation(add func(string, string), path string, agg *model.Simpl
 		add(path+".threshold_comparison_operator", "must be gt, gte, lt, lte, eq, or neq")
 	}
 	requireFloat(add, path+".threshold_breach_value", agg.ThresholdBreachValue)
-	requireFloat(add, path+".threshold_timeframe_value", agg.ThresholdTimeframeValue)
-	require(add, path+".threshold_timeframe_dimension", agg.ThresholdTimeframeDimension)
+	if agg.ThresholdTimeframeValue == nil && agg.ThresholdTimeframeDimension != "" {
+		add(path+".threshold_timeframe_value", "must be set with threshold_timeframe_dimension")
+	}
+	if agg.ThresholdTimeframeValue != nil && strings.TrimSpace(agg.ThresholdTimeframeDimension) == "" {
+		add(path+".threshold_timeframe_dimension", "must be set with threshold_timeframe_value")
+	}
+	if agg.TimeframeStartValue != nil && *agg.TimeframeStartValue != 0 {
+		add(path+".timeframe_start_value", "must be 0 or omitted when operation is threshold")
+	}
+	if agg.TimeframeEndValue != nil {
+		add(path+".timeframe_end_value", "must be omitted when operation is threshold")
+	}
+	if agg.TimeframeUnit != "" {
+		add(path+".timeframe_unit", "must be omitted when operation is threshold")
+	}
+	if agg.WinsorLowerPercentile != nil {
+		add(path+".winsor_lower_percentile", "must be omitted when operation is threshold")
+	}
+	if agg.WinsorUpperPercentile != nil {
+		add(path+".winsor_upper_percentile", "must be omitted when operation is threshold")
+	}
+	if agg.WinsorLowerFixedValue != nil {
+		add(path+".winsor_lower_fixed_value", "must be omitted when operation is threshold")
+	}
+	if agg.WinsorUpperFixedValue != nil {
+		add(path+".winsor_upper_fixed_value", "must be omitted when operation is threshold")
+	}
+}
+
+func validateNoThresholdFields(add func(string, string), path string, agg *model.SimpleMetricAggregation) {
+	if agg.ThresholdAggregationType != "" {
+		add(path+".threshold_aggregation_type", "can only be set when operation is threshold")
+	}
+	if agg.ThresholdComparisonOperator != "" {
+		add(path+".threshold_comparison_operator", "can only be set when operation is threshold")
+	}
+	if agg.ThresholdBreachValue != nil {
+		add(path+".threshold_breach_value", "can only be set when operation is threshold")
+	}
+	if agg.ThresholdTimeframeValue != nil {
+		add(path+".threshold_timeframe_value", "can only be set when operation is threshold")
+	}
+	if agg.ThresholdTimeframeDimension != "" {
+		add(path+".threshold_timeframe_dimension", "can only be set when operation is threshold")
+	}
 }
 
 func validateCombined(files []model.FileConfig) []Issue {
@@ -198,8 +242,8 @@ func validateMetricRefs(add func(string, string, string), file string, path stri
 	case metric.SimpleMetricAggregation != nil:
 		validateMeasureRef(add, file, path+".simple_metric_aggregation.measure", metric.SimpleMetricAggregation.Measure, measuresBySource)
 	case metric.RatioMetricAggregation != nil:
-		validateMeasureRef(add, file, path+".ratio_metric_aggregation.numerator.measure", metric.RatioMetricAggregation.Numerator.Measure, measuresBySource)
-		validateMeasureRef(add, file, path+".ratio_metric_aggregation.denominator.measure", metric.RatioMetricAggregation.Denominator.Measure, measuresBySource)
+		validateMeasureRef(add, file, path+".ratio_metric_aggregation.numerator_aggregation.measure", metric.RatioMetricAggregation.NumeratorAggregation.Measure, measuresBySource)
+		validateMeasureRef(add, file, path+".ratio_metric_aggregation.denominator_aggregation.measure", metric.RatioMetricAggregation.DenominatorAggregation.Measure, measuresBySource)
 	case metric.PercentileMetricAggregation != nil:
 		validateMeasureRef(add, file, path+".percentile_metric_aggregation.measure", metric.PercentileMetricAggregation.Measure, measuresBySource)
 	}

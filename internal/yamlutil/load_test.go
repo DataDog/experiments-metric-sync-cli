@@ -103,6 +103,46 @@ metrics:
 	}
 }
 
+func TestLoadFileThresholdRatioUsesCanonicalAggregationKeys(t *testing.T) {
+	path := writeYAML(t, `
+schema_version: 1
+sync_tag: checkout
+metrics:
+  - sync_id: met
+    name: met
+    metric_type: ratio
+    ratio_metric_aggregation:
+      numerator_aggregation:
+        operation: threshold
+        threshold_aggregation_type: sum
+        threshold_comparison_operator: gte
+        threshold_breach_value: 10
+        measure:
+          warehouse_metric_source_sync_id: src
+          measure_sync_id: m
+      denominator_aggregation:
+        operation: count
+        measure:
+          warehouse_metric_source_sync_id: src
+          measure_sync_id: m
+`)
+
+	config, err := LoadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ratio := config.Metrics[0].RatioMetricAggregation
+	if ratio == nil {
+		t.Fatal("expected ratio_metric_aggregation")
+	}
+	if ratio.NumeratorAggregation.Operation != "threshold" {
+		t.Fatalf("numerator operation = %q, want threshold", ratio.NumeratorAggregation.Operation)
+	}
+	if ratio.DenominatorAggregation.Operation != "count" {
+		t.Fatalf("denominator operation = %q, want count", ratio.DenominatorAggregation.Operation)
+	}
+}
+
 func writeYAML(t *testing.T, body string) string {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "metric-sync.yaml")

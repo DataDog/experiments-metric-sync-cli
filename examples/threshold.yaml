@@ -25,7 +25,7 @@ metrics:
     desired_change: METRIC_DECREASES
     simple_metric_aggregation:
       operation: threshold
-      threshold_aggregation_type: count
+      threshold_aggregation_type: sum
       threshold_comparison_operator: gt
       threshold_breach_value: 100
       threshold_timeframe_value: 7
@@ -33,4 +33,3 @@ metrics:
       measure:
         warehouse_metric_source_sync_id: checkout_events
         measure_sync_id: revenue
-      timeframe_start_value: 0

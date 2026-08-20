@@ -34,6 +34,27 @@ func TestValidateThresholdMetricValid(t *testing.T) {
 	}
 }
 
+func TestValidateThresholdMetricWithoutOptionalTimeframe(t *testing.T) {
+	issues := ValidateFiles([]model.FileConfig{{
+		Path: "threshold.yaml",
+		Config: thresholdConfig(model.Metric{
+			SyncID:     "metric",
+			Name:       "metric",
+			MetricType: "simple",
+			SimpleMetricAggregation: &model.SimpleMetricAggregation{
+				Operation:                   "threshold",
+				Measure:                     model.MeasureRef{MeasureSyncID: "m", WarehouseMetricSourceSyncID: "src"},
+				ThresholdAggregationType:    "count",
+				ThresholdComparisonOperator: "gt",
+				ThresholdBreachValue:        floatPtr(10),
+			},
+		}),
+	}})
+	if len(issues) != 0 {
+		t.Fatalf("expected no issues, got %v", issues)
+	}
+}
+
 func TestValidateThresholdMetricMissingFields(t *testing.T) {
 	issues := ValidateFiles([]model.FileConfig{{
 		Path: "threshold.yaml",
@@ -51,8 +72,6 @@ func TestValidateThresholdMetricMissingFields(t *testing.T) {
 		"threshold_aggregation_type",
 		"threshold_comparison_operator",
 		"threshold_breach_value",
-		"threshold_timeframe_value",
-		"threshold_timeframe_dimension",
 	}
 	if len(issues) != len(want) {
 		t.Fatalf("expected %d issues, got %d: %v", len(want), len(issues), issues)
@@ -61,6 +80,46 @@ func TestValidateThresholdMetricMissingFields(t *testing.T) {
 		if !strings.Contains(issues[i].Path, w) {
 			t.Errorf("issue %d path = %q, want it to mention %q", i, issues[i].Path, w)
 		}
+	}
+}
+
+func TestValidateThresholdMetricRequiresPairedTimeframeFields(t *testing.T) {
+	tests := []struct {
+		name      string
+		value     *float64
+		dimension string
+		wantPath  string
+	}{
+		{name: "missing dimension", value: floatPtr(7), wantPath: "threshold_timeframe_dimension"},
+		{name: "missing value", dimension: "days", wantPath: "threshold_timeframe_value"},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			issues := ValidateFiles([]model.FileConfig{{
+				Path: "threshold.yaml",
+				Config: thresholdConfig(model.Metric{
+					SyncID:     "metric",
+					Name:       "metric",
+					MetricType: "simple",
+					SimpleMetricAggregation: &model.SimpleMetricAggregation{
+						Operation:                   "threshold",
+						Measure:                     model.MeasureRef{MeasureSyncID: "m", WarehouseMetricSourceSyncID: "src"},
+						ThresholdAggregationType:    "count",
+						ThresholdComparisonOperator: "gt",
+						ThresholdBreachValue:        floatPtr(10),
+						ThresholdTimeframeValue:     test.value,
+						ThresholdTimeframeDimension: test.dimension,
+					},
+				}),
+			}})
+			if len(issues) != 1 {
+				t.Fatalf("expected 1 issue, got %d: %v", len(issues), issues)
+			}
+			if !strings.Contains(issues[0].Path, test.wantPath) {
+				t.Fatalf("issue path = %q, want it to mention %q", issues[0].Path, test.wantPath)
+			}
+		})
 	}
 }
 
@@ -101,7 +160,7 @@ func TestValidateThresholdRatioComponents(t *testing.T) {
 			Name:       "metric",
 			MetricType: "ratio",
 			RatioMetricAggregation: &model.RatioMetricAggregation{
-				Numerator: model.SimpleMetricAggregation{
+				NumeratorAggregation: model.SimpleMetricAggregation{
 					Operation:                   "threshold",
 					Measure:                     model.MeasureRef{MeasureSyncID: "m", WarehouseMetricSourceSyncID: "src"},
 					ThresholdAggregationType:    "sum",
@@ -110,7 +169,7 @@ func TestValidateThresholdRatioComponents(t *testing.T) {
 					ThresholdTimeframeValue:     floatPtr(1),
 					ThresholdTimeframeDimension: "weeks",
 				},
-				Denominator: model.SimpleMetricAggregation{
+				DenominatorAggregation: model.SimpleMetricAggregation{
 					Operation: "count",
 					Measure:   model.MeasureRef{MeasureSyncID: "m", WarehouseMetricSourceSyncID: "src"},
 				},
@@ -130,23 +189,93 @@ func TestValidateThresholdRatioComponentMissingFields(t *testing.T) {
 			Name:       "metric",
 			MetricType: "ratio",
 			RatioMetricAggregation: &model.RatioMetricAggregation{
-				Numerator: model.SimpleMetricAggregation{
+				NumeratorAggregation: model.SimpleMetricAggregation{
 					Operation: "threshold",
 					Measure:   model.MeasureRef{MeasureSyncID: "m", WarehouseMetricSourceSyncID: "src"},
 				},
-				Denominator: model.SimpleMetricAggregation{
+				DenominatorAggregation: model.SimpleMetricAggregation{
 					Operation: "count",
 					Measure:   model.MeasureRef{MeasureSyncID: "m", WarehouseMetricSourceSyncID: "src"},
 				},
 			},
 		}),
 	}})
-	if len(issues) != 5 {
-		t.Fatalf("expected 5 issues for numerator threshold, got %d: %v", len(issues), issues)
+	if len(issues) != 3 {
+		t.Fatalf("expected 3 issues for numerator threshold, got %d: %v", len(issues), issues)
 	}
 	for _, issue := range issues {
-		if !strings.Contains(issue.Path, "numerator") {
+		if !strings.Contains(issue.Path, "numerator_aggregation") {
 			t.Errorf("issue %q should be on the numerator path", issue.Path)
+		}
+	}
+}
+
+func TestValidateThresholdMetricRejectsStandardTimeframeAndWinsorization(t *testing.T) {
+	issues := ValidateFiles([]model.FileConfig{{
+		Path: "threshold.yaml",
+		Config: thresholdConfig(model.Metric{
+			SyncID:     "metric",
+			Name:       "metric",
+			MetricType: "simple",
+			SimpleMetricAggregation: &model.SimpleMetricAggregation{
+				Operation:                   "threshold",
+				Measure:                     model.MeasureRef{MeasureSyncID: "m", WarehouseMetricSourceSyncID: "src"},
+				ThresholdAggregationType:    "count",
+				ThresholdComparisonOperator: "gt",
+				ThresholdBreachValue:        floatPtr(10),
+				TimeframeStartValue:         intPtr(1),
+				TimeframeEndValue:           intPtr(7),
+				TimeframeUnit:               "days",
+				WinsorLowerPercentile:       floatPtr(0.01),
+				WinsorUpperPercentile:       floatPtr(0.99),
+				WinsorLowerFixedValue:       floatPtr(0),
+				WinsorUpperFixedValue:       floatPtr(100),
+			},
+		}),
+	}})
+	wantPaths := []string{
+		"timeframe_start_value",
+		"timeframe_end_value",
+		"timeframe_unit",
+		"winsor_lower_percentile",
+		"winsor_upper_percentile",
+		"winsor_lower_fixed_value",
+		"winsor_upper_fixed_value",
+	}
+	if len(issues) != len(wantPaths) {
+		t.Fatalf("expected %d issues, got %d: %v", len(wantPaths), len(issues), issues)
+	}
+	for i, wantPath := range wantPaths {
+		if !strings.Contains(issues[i].Path, wantPath) {
+			t.Errorf("issue %d path = %q, want it to mention %q", i, issues[i].Path, wantPath)
+		}
+	}
+}
+
+func TestValidateNonThresholdMetricRejectsThresholdFields(t *testing.T) {
+	issues := ValidateFiles([]model.FileConfig{{
+		Path: "threshold.yaml",
+		Config: thresholdConfig(model.Metric{
+			SyncID:     "metric",
+			Name:       "metric",
+			MetricType: "simple",
+			SimpleMetricAggregation: &model.SimpleMetricAggregation{
+				Operation:                   "sum",
+				Measure:                     model.MeasureRef{MeasureSyncID: "m", WarehouseMetricSourceSyncID: "src"},
+				ThresholdAggregationType:    "count",
+				ThresholdComparisonOperator: "gt",
+				ThresholdBreachValue:        floatPtr(10),
+				ThresholdTimeframeValue:     floatPtr(7),
+				ThresholdTimeframeDimension: "days",
+			},
+		}),
+	}})
+	if len(issues) != 5 {
+		t.Fatalf("expected 5 issues, got %d: %v", len(issues), issues)
+	}
+	for _, issue := range issues {
+		if !strings.Contains(issue.Message, "only be set when operation is threshold") {
+			t.Errorf("issue %q should reject threshold fields on a non-threshold operation", issue)
 		}
 	}
 }
@@ -167,5 +296,9 @@ func thresholdConfig(metric model.Metric) model.SyncConfig {
 }
 
 func floatPtr(v float64) *float64 {
+	return &v
+}
+
+func intPtr(v int) *int {
 	return &v
 }

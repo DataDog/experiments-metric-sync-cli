@@ -106,7 +106,8 @@ type SimpleMetricAggregation struct {
 	WinsorUpperPercentile *float64         `json:"winsor_upper_percentile,omitempty" yaml:"winsor_upper_percentile,omitempty"`
 	WinsorLowerFixedValue *float64         `json:"winsor_lower_fixed_value,omitempty" yaml:"winsor_lower_fixed_value,omitempty"`
 	WinsorUpperFixedValue *float64         `json:"winsor_upper_fixed_value,omitempty" yaml:"winsor_upper_fixed_value,omitempty"`
-	// Threshold aggregation fields, required when operation is "threshold".
+	// Threshold aggregation fields. Type, comparison operator, and breach value are
+	// required when operation is "threshold"; timeframe fields are optional as a pair.
 	ThresholdAggregationType    string   `json:"threshold_aggregation_type,omitempty" yaml:"threshold_aggregation_type,omitempty"`
 	ThresholdComparisonOperator string   `json:"threshold_comparison_operator,omitempty" yaml:"threshold_comparison_operator,omitempty"`
 	ThresholdBreachValue        *float64 `json:"threshold_breach_value,omitempty" yaml:"threshold_breach_value,omitempty"`
@@ -115,8 +116,8 @@ type SimpleMetricAggregation struct {
 }
 
 type RatioMetricAggregation struct {
-	Numerator   SimpleMetricAggregation `json:"numerator" yaml:"numerator"`
-	Denominator SimpleMetricAggregation `json:"denominator" yaml:"denominator"`
+	NumeratorAggregation   SimpleMetricAggregation `json:"numerator_aggregation" yaml:"numerator_aggregation"`
+	DenominatorAggregation SimpleMetricAggregation `json:"denominator_aggregation" yaml:"denominator_aggregation"`
 }
 
 type PercentileMetricAggregation struct {

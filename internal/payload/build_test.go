@@ -5,6 +5,7 @@
 package payload
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/DataDog/experiments-metric-sync-cli/internal/model"
@@ -132,5 +133,54 @@ func TestBuildPreservesThresholdFields(t *testing.T) {
 	}
 	if agg.ThresholdTimeframeValue == nil || *agg.ThresholdTimeframeValue != 7 {
 		t.Fatalf("threshold_timeframe_value = %v, want 7", agg.ThresholdTimeframeValue)
+	}
+}
+
+func TestBuildSerializesCanonicalRatioAggregationKeys(t *testing.T) {
+	files := []model.FileConfig{{
+		Path: "ratio.yaml",
+		Config: model.SyncConfig{
+			SchemaVersion: 1,
+			SyncTag:       "checkout",
+			Metrics: []model.Metric{{
+				SyncID:     "metric",
+				Name:       "metric",
+				MetricType: "ratio",
+				RatioMetricAggregation: &model.RatioMetricAggregation{
+					NumeratorAggregation: model.SimpleMetricAggregation{Operation: "sum"},
+					DenominatorAggregation: model.SimpleMetricAggregation{
+						Operation: "count",
+					},
+				},
+			}},
+		},
+	}}
+
+	got, _, err := Build(files)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, err := json.Marshal(got)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var decoded map[string]any
+	if err := json.Unmarshal(body, &decoded); err != nil {
+		t.Fatal(err)
+	}
+	metrics := decoded["metrics"].([]any)
+	metric := metrics[0].(map[string]any)
+	ratio := metric["ratio_metric_aggregation"].(map[string]any)
+	if _, ok := ratio["numerator_aggregation"]; !ok {
+		t.Fatalf("serialized ratio is missing numerator_aggregation: %s", body)
+	}
+	if _, ok := ratio["denominator_aggregation"]; !ok {
+		t.Fatalf("serialized ratio is missing denominator_aggregation: %s", body)
+	}
+	if _, ok := ratio["numerator"]; ok {
+		t.Fatalf("serialized ratio contains legacy numerator key: %s", body)
+	}
+	if _, ok := ratio["denominator"]; ok {
+		t.Fatalf("serialized ratio contains legacy denominator key: %s", body)
 	}
 }
