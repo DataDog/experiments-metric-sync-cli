@@ -156,7 +156,7 @@ func TestPlanFetchesWarehouseConnectionWhenYAMLOmitsIt(t *testing.T) {
 		case r.Method == http.MethodGet && r.URL.Path == "/api/unstable/ffe/warehouse-connections":
 			sawLookup = true
 			writeWarehouseConnections(t, w, "resolved-connection")
-		case r.Method == http.MethodPost && r.URL.Path == "/api/unstable/ffe/metric-syncs":
+		case r.Method == http.MethodPost && r.URL.Path == "/api/v2/experiments/metric-syncs":
 			sawSubmit = true
 			var request model.SyncConfig
 			if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
@@ -200,7 +200,7 @@ func TestPlanUsesExplicitWarehouseConnectionWithoutLookup(t *testing.T) {
 		if r.Method == http.MethodGet && r.URL.Path == "/api/unstable/ffe/warehouse-connections" {
 			t.Fatal("did not expect warehouse connection lookup")
 		}
-		if r.Method != http.MethodPost || r.URL.Path != "/api/unstable/ffe/metric-syncs" {
+		if r.Method != http.MethodPost || r.URL.Path != "/api/v2/experiments/metric-syncs" {
 			t.Fatalf("unexpected request %s %s", r.Method, r.URL.Path)
 		}
 		sawSubmit = true
@@ -397,5 +397,223 @@ func writeOperation(t *testing.T, w http.ResponseWriter, id string, syncTag stri
 		},
 	}); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestPublicV2SubmitLifecycle(t *testing.T) {
+	outcomes := []struct {
+		name         string
+		planCode     int
+		executeCode  int
+		requestCount int
+	}{
+		{"success", 0, 0, 4},
+		{"failed", 1, 1, 3},
+		{"no-poll", 0, 0, 1},
+		{"submit-error", 1, 1, 1},
+		{"status-error", 1, 1, 2},
+		{"result-error", 1, 1, 4},
+		{"blocked", 0, 1, 4},
+	}
+	for _, operation := range []string{"plan", "execute"} {
+		for _, outcome := range outcomes {
+			t.Run(operation+"/"+outcome.name, func(t *testing.T) {
+				var requests []string
+				server := httptest.NewServer(submitLifecycleHandler(t, operation, outcome.name, &requests))
+				defer server.Close()
+				code, stdout, stderr := runSubmitLifecycle(t, server.URL, operation, outcome.name)
+				wantCode := outcome.planCode
+				if operation == "execute" {
+					wantCode = outcome.executeCode
+				}
+				if code != wantCode || len(requests) != outcome.requestCount {
+					t.Fatalf("code=%d want=%d requests=%v want count=%d stdout=%s stderr=%s", code, wantCode, requests, outcome.requestCount, stdout, stderr)
+				}
+				if outcome.name == "no-poll" && !strings.Contains(stdout, "operation-id") {
+					t.Errorf("missing operation ID: %s", stdout)
+				}
+			})
+		}
+	}
+}
+
+func writeLifecycleYAML(t *testing.T) string {
+	t.Helper()
+	path := writeValidYAMLWithWarehouseConnection(t, "explicit-connection")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	data = append(data, []byte("\noptions:\n  is_certified: false\n  upgrade_mode: by_id\n  force_delete: true\n")...)
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+func runSubmitLifecycle(t *testing.T, site, operation, outcome string) (int, string, string) {
+	t.Helper()
+	t.Setenv("DD_API_KEY", "api")
+	t.Setenv("DD_APP_KEY", "app")
+	args := []string{operation, writeLifecycleYAML(t), "--site", site, "--idempotency-key", "caller-key", "--poll-interval", "1ms", "--log-file", filepath.Join(t.TempDir(), "metric-sync.log")}
+	if outcome == "no-poll" {
+		args = append(args, "--no-poll")
+	}
+	var stdout, stderr bytes.Buffer
+	code := runWithIO(args, VersionInfo{Version: "test"}, &stdout, &stderr)
+	return code, stdout.String(), stderr.String()
+}
+
+func submitLifecycleHandler(t *testing.T, operation, outcome string, requests *[]string) http.HandlerFunc {
+	t.Helper()
+	polls := 0
+	return func(w http.ResponseWriter, r *http.Request) {
+		*requests = append(*requests, r.Method+" "+r.URL.Path)
+		if r.Header.Get("DD-API-KEY") != "api" || r.Header.Get("DD-APPLICATION-KEY") != "app" || r.Header.Get("Accept") != "application/json" {
+			t.Error("missing authentication or accept headers")
+		}
+		switch r.Method + " " + r.URL.Path {
+		case "POST /api/v2/experiments/metric-syncs":
+			assertLifecycleSubmit(t, r, operation)
+			if outcome == "submit-error" {
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			writeOperation(t, w, "operation-id", "cobra-test", operation, "queued")
+		case "GET /api/v2/experiments/metric-syncs/operation-id":
+			polls++
+			writeLifecycleStatus(w, operation, outcome, polls)
+		case "GET /api/v2/experiments/metric-syncs/operation-id/result":
+			writeLifecycleResult(w, operation, outcome)
+		default:
+			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}
+}
+
+func assertLifecycleSubmit(t *testing.T, r *http.Request, operation string) {
+	t.Helper()
+	wantPlan := "false"
+	if operation == "plan" {
+		wantPlan = "true"
+	}
+	if r.URL.Query().Get("plan") != wantPlan || r.URL.Query().Get("is_certified") != "false" || r.URL.Query().Get("upgrade_mode") != "by_id" || r.URL.Query().Get("force_delete") != "true" {
+		t.Errorf("unexpected options: %s", r.URL.RawQuery)
+	}
+	if r.Header.Get("Idempotency-Key") != "caller-key" || r.Header.Get("Content-Type") != "application/json" {
+		t.Error("missing submit headers")
+	}
+	assertLifecyclePayload(t, r)
+}
+
+func assertLifecyclePayload(t *testing.T, r *http.Request) {
+	t.Helper()
+	var request model.SyncConfig
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		t.Error(err)
+		return
+	}
+	if request.SchemaVersion != 1 || request.SyncTag != "cobra-test" || request.WarehouseConnectionID != "explicit-connection" || len(request.WarehouseMetricSources) != 1 || len(request.Metrics) != 1 {
+		t.Errorf("unexpected payload: %#v", request)
+		return
+	}
+	source, metric := request.WarehouseMetricSources[0], request.Metrics[0]
+	if len(source.Measures) != 1 || metric.SimpleMetricAggregation == nil {
+		t.Errorf("missing measure or aggregation: %#v", request)
+		return
+	}
+	if source.SyncID != "source" || source.Measures[0].SyncID != "value" || metric.SyncID != "metric" || metric.SimpleMetricAggregation.Measure.MeasureSyncID != "value" {
+		t.Error("caller sync IDs changed")
+	}
+}
+
+func lifecycleTerminalStatus(operation, outcome string) string {
+	if outcome == "failed" {
+		return "failed"
+	}
+	if operation == "plan" {
+		return "planned"
+	}
+	return "success"
+}
+
+func writeLifecycleStatus(w http.ResponseWriter, operation, outcome string, polls int) {
+	if outcome == "status-error" {
+		w.WriteHeader(http.StatusForbidden)
+		return
+	}
+	status := lifecycleTerminalStatus(operation, outcome)
+	if polls == 1 {
+		status = "running"
+	}
+	_ = json.NewEncoder(w).Encode(map[string]any{"data": map[string]any{
+		"id":         "operation-id",
+		"attributes": map[string]any{"status": status, "operation_type": operation},
+	}})
+}
+
+func writeLifecycleResult(w http.ResponseWriter, operation, outcome string) {
+	if outcome == "result-error" {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	blocked := []map[string]any{}
+	if outcome == "blocked" {
+		blocked = append(blocked, map[string]any{"sync_id": "metric", "reason": "in use"})
+	}
+	_ = json.NewEncoder(w).Encode(map[string]any{"data": map[string]any{
+		"id": "operation-id",
+		"attributes": map[string]any{
+			"status":  lifecycleTerminalStatus(operation, outcome),
+			"plan":    operation == "plan",
+			"created": map[string]any{"metrics": []map[string]any{{"sync_id": "metric", "id": "metric-id"}}},
+			"blocked": map[string]any{"metrics": blocked},
+		},
+	}})
+}
+
+func TestPublicV2StatusAndResultCommands(t *testing.T) {
+	for _, command := range []string{"status", "result"} {
+		for _, response := range []string{"ready", "pending", "error"} {
+			t.Run(command+"/"+response, func(t *testing.T) {
+				server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					path := "/api/v2/experiments/metric-syncs/operation-id"
+					if command == "result" {
+						path += "/result"
+					}
+					if r.Method != http.MethodGet || r.URL.Path != path {
+						t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+					}
+					if response == "error" {
+						w.WriteHeader(http.StatusNotFound)
+						return
+					}
+					if response == "pending" && command == "result" {
+						w.Header().Set("Retry-After", "2")
+						w.WriteHeader(http.StatusAccepted)
+					}
+					_, _ = w.Write([]byte(`{"data":{"id":"operation-id","attributes":{"status":"planned","plan":true,"message":"not ready","created":{"metrics":[{"sync_id":"metric","id":"metric-id"}]}}}}`))
+				}))
+				defer server.Close()
+				t.Setenv("DD_API_KEY", "api")
+				t.Setenv("DD_APP_KEY", "app")
+				var stdout, stderr bytes.Buffer
+				code := runWithIO([]string{command, "operation-id", "--site", server.URL, "--log-file", filepath.Join(t.TempDir(), "metric-sync.log")}, VersionInfo{Version: "test"}, &stdout, &stderr)
+				want := 0
+				if response == "error" {
+					want = 1
+				}
+				if response == "pending" && command == "result" {
+					want = 2
+				}
+				if code != want {
+					t.Fatalf("code=%d want=%d stdout=%s stderr=%s", code, want, stdout.String(), stderr.String())
+				}
+				if want == 0 && !strings.Contains(stdout.String(), "operation-id") {
+					t.Errorf("missing decoded ID: %s", stdout.String())
+				}
+			})
+		}
 	}
 }
