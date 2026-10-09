@@ -29,8 +29,8 @@ metrics:
         measure_sync_id: revenue
       winsor_upper_percentile: 0.99
       winsorization_strategy: nonzero
-  - sync_id: average_booking_revenue
-    name: Average booking revenue
+  - sync_id: capped_booking_revenue_share
+    name: Capped booking revenue share
     metric_type: ratio
     ratio_metric_aggregation:
       numerator_aggregation:
@@ -41,7 +41,7 @@ metrics:
         winsor_upper_percentile: 0.99
         winsorization_strategy: nonzero
       denominator_aggregation:
-        operation: count
+        operation: sum
         measure:
           warehouse_metric_source_sync_id: bookings
           measure_sync_id: revenue
