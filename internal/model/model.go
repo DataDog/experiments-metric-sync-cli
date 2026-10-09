@@ -134,9 +134,8 @@ type MeasureRef struct {
 	MeasureSyncID                string `json:"measure_sync_id,omitempty" yaml:"measure_sync_id,omitempty"`
 	WarehouseMetricSourceSyncID  string `json:"warehouse_metric_source_sync_id,omitempty" yaml:"warehouse_metric_source_sync_id,omitempty"`
 	WarehouseMetricSourceSyncTag string `json:"warehouse_metric_source_sync_tag,omitempty" yaml:"warehouse_metric_source_sync_tag,omitempty"`
-	// Keep this YAML field so validation can report how to replace unsupported IDs.
-	WarehouseMetricMeasureID string `json:"-" yaml:"warehouse_metric_measure_id,omitempty"`
-	SubjectTypeName          string `json:"subject_type_name,omitempty" yaml:"subject_type_name,omitempty"`
+	WarehouseMetricMeasureID     string `json:"warehouse_metric_measure_id,omitempty" yaml:"warehouse_metric_measure_id,omitempty"`
+	SubjectTypeName              string `json:"subject_type_name,omitempty" yaml:"subject_type_name,omitempty"`
 }
 
 type PropertyFilter struct {

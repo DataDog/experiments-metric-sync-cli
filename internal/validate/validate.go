@@ -225,22 +225,25 @@ func validateCombined(files []model.FileConfig) []Issue {
 
 	for _, file := range files {
 		config := file.Config
+		addForFile := func(path, message string) {
+			add(file.Path, path, message)
+		}
 		for i, metric := range config.Metrics {
 			if previous, ok := metricIDs[metric.SyncID]; ok {
 				add(file.Path, fmt.Sprintf("metrics[%d].sync_id", i), fmt.Sprintf("duplicates metric sync_id from %s", previous))
 			} else if metric.SyncID != "" {
 				metricIDs[metric.SyncID] = file.Path
 			}
-			validateMetricRefs(add, file.Path, fmt.Sprintf("metrics[%d]", i), metric, syncTag, sourcesByID)
+			validateMetricRefs(addForFile, fmt.Sprintf("metrics[%d]", i), metric, syncTag, sourcesByID)
 		}
 	}
 	return issues
 }
 
-func validateMetricRefs(add func(string, string, string), file string, path string, metric model.Metric, syncTag string, sourcesByID map[string]model.WarehouseMetricSource) {
+func validateMetricRefs(add func(string, string), path string, metric model.Metric, syncTag string, sourcesByID map[string]model.WarehouseMetricSource) {
 	validateAgg := func(path string, agg model.SimpleMetricAggregation) {
-		if validateMeasureRef(add, file, path+".measure", agg.Measure, syncTag, sourcesByID) {
-			validateOperationAgainstMeasure(add, file, path+".operation", agg.Operation, agg.Measure)
+		if validateMeasureRef(add, path+".measure", agg.Measure, syncTag, sourcesByID) {
+			validateOperationAgainstMeasure(add, path+".operation", agg.Operation, agg.Measure)
 		}
 	}
 	if metric.SimpleMetricAggregation != nil {
@@ -251,17 +254,17 @@ func validateMetricRefs(add func(string, string, string), file string, path stri
 		validateAgg(path+".ratio_metric_aggregation.denominator_aggregation", metric.RatioMetricAggregation.DenominatorAggregation)
 	}
 	if metric.PercentileMetricAggregation != nil {
-		validateMeasureRef(add, file, path+".percentile_metric_aggregation.measure", metric.PercentileMetricAggregation.Measure, syncTag, sourcesByID)
+		validateMeasureRef(add, path+".percentile_metric_aggregation.measure", metric.PercentileMetricAggregation.Measure, syncTag, sourcesByID)
 	}
 }
 
-func validateMeasureRef(add func(string, string, string), file string, path string, ref model.MeasureRef, syncTag string, sourcesByID map[string]model.WarehouseMetricSource) bool {
+func validateMeasureRef(add func(string, string), path string, ref model.MeasureRef, syncTag string, sourcesByID map[string]model.WarehouseMetricSource) bool {
 	if ref.WarehouseMetricMeasureID != "" {
-		add(file, path+".warehouse_metric_measure_id", "is not supported by the sync API; use warehouse_metric_source_sync_id with measure_sync_id, subject_type_name, or kind: each_record")
+		add(path+".warehouse_metric_measure_id", "is not supported by the sync API; use warehouse_metric_source_sync_id with measure_sync_id, subject_type_name, or kind: each_record")
 		return false
 	}
 	if strings.TrimSpace(ref.WarehouseMetricSourceSyncID) == "" {
-		add(file, path+".warehouse_metric_source_sync_id", "is required; set it to the source sync_id")
+		add(path+".warehouse_metric_source_sync_id", "is required; set it to the source sync_id")
 		return false
 	}
 	selectorCount := 0
@@ -271,19 +274,19 @@ func validateMeasureRef(add func(string, string, string), file string, path stri
 		}
 	}
 	if selectorCount != 1 {
-		add(file, path, "must select exactly one of measure_sync_id, subject_type_name, or kind: each_record")
+		add(path, "must select exactly one of measure_sync_id, subject_type_name, or kind: each_record")
 		return false
 	}
 	if ref.Kind != "" && ref.Kind != "each_record" {
-		add(file, path+".kind", "must be each_record; use measure_sync_id or subject_type_name for a column measure")
+		add(path+".kind", "must be each_record; use measure_sync_id or subject_type_name for a column measure")
 		return false
 	}
 	if ref.MeasureSyncID != "" && strings.TrimSpace(ref.MeasureSyncID) == "" {
-		add(file, path+".measure_sync_id", "must not be blank")
+		add(path+".measure_sync_id", "must not be blank")
 		return false
 	}
 	if ref.SubjectTypeName != "" && strings.TrimSpace(ref.SubjectTypeName) == "" {
-		add(file, path+".subject_type_name", "must not be blank")
+		add(path+".subject_type_name", "must not be blank")
 		return false
 	}
 
@@ -294,7 +297,7 @@ func validateMeasureRef(add func(string, string, string), file string, path stri
 		return true
 	}
 	if !ok {
-		add(file, path+".warehouse_metric_source_sync_id", "does not match a source sync_id in this operation; include the source or set warehouse_metric_source_sync_tag for a server reference and run plan")
+		add(path+".warehouse_metric_source_sync_id", "does not match a source sync_id in this operation; include the source or set warehouse_metric_source_sync_tag for a server reference and run plan")
 		return false
 	}
 	if ref.MeasureSyncID != "" {
@@ -303,7 +306,7 @@ func validateMeasureRef(add func(string, string, string), file string, path stri
 				return true
 			}
 		}
-		add(file, path+".measure_sync_id", "does not match a measure sync_id on the referenced source")
+		add(path+".measure_sync_id", "does not match a measure sync_id on the referenced source")
 		return false
 	}
 	if ref.SubjectTypeName != "" {
@@ -312,30 +315,22 @@ func validateMeasureRef(add func(string, string, string), file string, path stri
 				return true
 			}
 		}
-		add(file, path+".subject_type_name", "does not match subject_types[].name on the referenced source; add the subject mapping or use a mapped name")
+		add(path+".subject_type_name", "does not match subject_types[].name on the referenced source; add the subject mapping or use a mapped name")
 		return false
 	}
 	return true
 }
 
-func validateOperationAgainstMeasure(add func(string, string, string), file, path, operation string, ref model.MeasureRef) {
-	switch operation {
-	case "count":
-		if ref.Kind != "each_record" {
-			add(file, path, "count requires measure.kind: each_record")
-		}
-	case "sum", "average":
-		if ref.MeasureSyncID == "" {
-			add(file, path, operation+" requires a user-defined measure; set measure.measure_sync_id")
-		}
-	case "countDistinctValue":
-		if ref.Kind == "each_record" {
-			add(file, path, "countDistinctValue cannot use kind: each_record; set measure.measure_sync_id or measure.subject_type_name")
-		}
-	case "uniqueSubjects":
-		if ref.SubjectTypeName == "" {
-			add(file, path, "uniqueSubjects requires measure.subject_type_name; use a subject mapped on the source")
-		}
+func validateOperationAgainstMeasure(add func(string, string), path, operation string, ref model.MeasureRef) {
+	switch {
+	case operation == "count" && ref.Kind != "each_record":
+		add(path, "count requires measure.kind: each_record")
+	case oneOf(operation, "sum", "average") && ref.MeasureSyncID == "":
+		add(path, operation+" requires a user-defined measure; set measure.measure_sync_id")
+	case operation == "countDistinctValue" && ref.Kind == "each_record":
+		add(path, "countDistinctValue cannot use kind: each_record; set measure.measure_sync_id or measure.subject_type_name")
+	case operation == "uniqueSubjects" && ref.SubjectTypeName == "":
+		add(path, "uniqueSubjects requires measure.subject_type_name; use a subject mapped on the source")
 	}
 }
 
