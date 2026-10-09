@@ -11,6 +11,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -191,46 +192,77 @@ func TestPlanFetchesWarehouseConnectionWhenYAMLOmitsIt(t *testing.T) {
 	}
 }
 
-func TestPlanUsesExplicitWarehouseConnectionWithoutLookup(t *testing.T) {
-	yamlPath := writeValidYAMLWithWarehouseConnection(t, "explicit-connection")
-	logPath := filepath.Join(t.TempDir(), "metric-sync.log")
-	var sawSubmit bool
-
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodGet && r.URL.Path == "/api/unstable/ffe/warehouse-connections" {
-			t.Fatal("did not expect warehouse connection lookup")
+func TestSubmitUsesExplicitWarehouseConnectionWithoutLookup(t *testing.T) {
+	for _, command := range []string{"plan", "execute"} {
+		for _, omitted := range []bool{false, true} {
+			name := "explicit"
+			if omitted {
+				name = "omitted"
+			}
+			t.Run(command+"/"+name, func(t *testing.T) {
+				yamlPath := writeValidYAMLWithWarehouseConnection(t, "explicit-connection")
+				if omitted {
+					data, err := os.ReadFile(yamlPath)
+					if err != nil {
+						t.Fatal(err)
+					}
+					content := strings.ReplaceAll(string(data), "    additional_timestamp_columns:\n      - TRANSACTION_TIMESTAMP\n", "")
+					content = strings.ReplaceAll(content, "      winsorization_strategy: nonzero\n", "")
+					if err := os.WriteFile(yamlPath, []byte(content), 0o600); err != nil {
+						t.Fatal(err)
+					}
+				}
+				var received map[string]any
+				server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					if r.Method != http.MethodPost || r.URL.Path != "/api/unstable/ffe/metric-syncs" {
+						t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+						w.WriteHeader(http.StatusBadRequest)
+						return
+					}
+					if got := r.URL.Query().Get("plan"); (got == "true") != (command == "plan") {
+						t.Errorf("unexpected plan query: %q", got)
+					}
+					if err := json.NewDecoder(r.Body).Decode(&received); err != nil {
+						t.Error(err)
+					}
+					writeOperation(t, w, "operation-id", "cobra-test", command, "queued")
+				}))
+				defer server.Close()
+				t.Setenv("DD_API_KEY", "api")
+				t.Setenv("DD_APP_KEY", "app")
+				var stdout, stderr bytes.Buffer
+				code := runWithIO([]string{command, yamlPath, "--site", server.URL, "--no-poll", "--log-file", filepath.Join(t.TempDir(), "metric-sync.log")}, VersionInfo{Version: "test"}, &stdout, &stderr)
+				if code != 0 {
+					t.Fatalf("exit %d, stdout: %s stderr: %s", code, &stdout, &stderr)
+				}
+				if received == nil {
+					t.Fatal("expected submit")
+				}
+				if received["warehouse_connection_id"] != "explicit-connection" {
+					t.Fatalf("unexpected warehouse connection: %v", received)
+				}
+				source := received["warehouse_metric_sources"].([]any)[0].(map[string]any)
+				agg := received["metrics"].([]any)[0].(map[string]any)["simple_metric_aggregation"].(map[string]any)
+				if omitted {
+					if _, ok := source["additional_timestamp_columns"]; ok {
+						t.Fatal("expected omitted timestamps")
+					}
+					if _, ok := agg["winsorization_strategy"]; ok {
+						t.Fatal("expected omitted strategy")
+					}
+				} else {
+					if !reflect.DeepEqual(source["additional_timestamp_columns"], []any{"TRANSACTION_TIMESTAMP"}) {
+						t.Fatalf("unexpected timestamps: %v", source)
+					}
+					if agg["winsorization_strategy"] != "nonzero" {
+						t.Fatalf("unexpected strategy: %v", agg)
+					}
+				}
+				if agg["winsor_upper_percentile"] != 0.99 {
+					t.Fatalf("unexpected upper percentile: %v", agg)
+				}
+			})
 		}
-		if r.Method != http.MethodPost || r.URL.Path != "/api/unstable/ffe/metric-syncs" {
-			t.Fatalf("unexpected request %s %s", r.Method, r.URL.Path)
-		}
-		sawSubmit = true
-		var request model.SyncConfig
-		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-			t.Fatal(err)
-		}
-		if request.WarehouseConnectionID != "explicit-connection" {
-			t.Fatalf("got warehouse connection %q", request.WarehouseConnectionID)
-		}
-		writeOperation(t, w, "operation-id", "cobra-test", "plan", "queued")
-	}))
-	defer server.Close()
-	t.Setenv("DD_API_KEY", "api")
-	t.Setenv("DD_APP_KEY", "app")
-
-	var stdout, stderr bytes.Buffer
-	code := runWithIO([]string{
-		"plan",
-		yamlPath,
-		"--site", server.URL,
-		"--no-poll",
-		"--log-file", logPath,
-	}, VersionInfo{Version: "test"}, &stdout, &stderr)
-
-	if code != 0 {
-		t.Fatalf("got exit code %d, stdout: %s stderr: %s", code, stdout.String(), stderr.String())
-	}
-	if !sawSubmit {
-		t.Fatal("expected submit")
 	}
 }
 
@@ -330,8 +362,10 @@ sync_tag: cobra-test
 warehouse_metric_sources:
   - sync_id: source
     name: Source
-    sql: SELECT USER_ID, EVENT_TIMESTAMP, VALUE FROM table
+    sql: SELECT USER_ID, EVENT_TIMESTAMP, TRANSACTION_TIMESTAMP, VALUE FROM table
     timestamp_column: EVENT_TIMESTAMP
+    additional_timestamp_columns:
+      - TRANSACTION_TIMESTAMP
     subject_types:
       - name: User
         column_name: USER_ID
@@ -350,6 +384,8 @@ metrics:
         warehouse_metric_source_sync_id: source
         measure_sync_id: value
       timeframe_start_value: 0
+      winsor_upper_percentile: 0.99
+      winsorization_strategy: nonzero
 `)
 	if err := os.WriteFile(path, data, 0o600); err != nil {
 		t.Fatal(err)
@@ -397,5 +433,40 @@ func writeOperation(t *testing.T, w http.ResponseWriter, id string, syncTag stri
 		},
 	}); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestCommandsRejectInvalidTimestampAndWinsorizationFieldsBeforeAPIRequest(t *testing.T) {
+	example, err := os.ReadFile(writeValidYAML(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct{ name, old, replacement, path string }{
+		{"strategy", "winsorization_strategy: nonzero", `winsorization_strategy: ""`, "metrics[0].simple_metric_aggregation.winsorization_strategy"},
+		{"duplicate timestamp", "      - TRANSACTION_TIMESTAMP", "      - TRANSACTION_TIMESTAMP\n      - TRANSACTION_TIMESTAMP", "warehouse_metric_sources[0].additional_timestamp_columns[1]"},
+		{"too many timestamps", "      - TRANSACTION_TIMESTAMP", "      - a\n      - b\n      - c\n      - d\n      - e", "warehouse_metric_sources[0].additional_timestamp_columns"},
+	} {
+		for _, command := range []string{"validate", "plan", "execute"} {
+			t.Run(command+"/"+tc.name, func(t *testing.T) {
+				path := filepath.Join(t.TempDir(), "invalid.yaml")
+				content := strings.Replace(string(example), tc.old, tc.replacement, 1)
+				if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+					t.Fatal(err)
+				}
+				server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					t.Error("invalid fields must fail before any API request")
+					w.WriteHeader(http.StatusInternalServerError)
+				}))
+				defer server.Close()
+				t.Setenv("DD_API_KEY", "test-api")
+				t.Setenv("DD_APP_KEY", "test-app")
+				var stdout, stderr bytes.Buffer
+				code := runWithIO([]string{command, path, "--site", server.URL, "--log-file", filepath.Join(t.TempDir(), "test.log")}, VersionInfo{Version: "test"}, &stdout, &stderr)
+				output := stdout.String() + stderr.String()
+				if code == 0 || !strings.Contains(output, path) || !strings.Contains(output, tc.path) {
+					t.Fatalf("exit %d, expected file and field error: %s", code, output)
+				}
+			})
+		}
 	}
 }
