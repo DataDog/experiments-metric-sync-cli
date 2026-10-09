@@ -31,7 +31,8 @@ func PrintDiscovered(w io.Writer, files []string) error {
 func PrintValidation(w io.Writer, issues []validate.Issue) error {
 	if len(issues) == 0 {
 		return renderRows(w, "Validation", 10, []row{
-			{label: "Status", value: colorGreen("passed")},
+			{label: "Status", value: colorGreen("passed (local checks)")},
+			{label: "Next step", value: "Run plan to check server references and preview changes."},
 		})
 	}
 	if err := renderRows(w, "Validation", 10, []row{

@@ -65,6 +65,10 @@ metric-sync version
 checks an operation by ID. `result` fetches the terminal plan or execute result.
 `version` prints build metadata.
 
+For YAML fields and measure references, see
+[Sync Experiment Metrics from YAML](https://docs.datadoghq.com/experiments/defining_metrics/metric_sync/#yaml-reference).
+See [examples](examples/) for complete YAML files.
+
 ## Idempotency
 
 The CLI sends an `Idempotency-Key` for `plan` and `execute` requests. In CI, the
