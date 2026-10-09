@@ -114,6 +114,7 @@ metrics:
     ratio_metric_aggregation:
       numerator_aggregation:
         operation: threshold
+        winsorization_strategy: all_assigned_subjects
         threshold_aggregation_type: sum
         threshold_comparison_operator: gte
         threshold_breach_value: 10
@@ -122,6 +123,7 @@ metrics:
           measure_sync_id: m
       denominator_aggregation:
         operation: count
+        winsorization_strategy: nonzero
         measure:
           warehouse_metric_source_sync_id: src
           measure_sync_id: m
@@ -134,6 +136,9 @@ metrics:
 	ratio := config.Metrics[0].RatioMetricAggregation
 	if ratio == nil {
 		t.Fatal("expected ratio_metric_aggregation")
+	}
+	if ratio.NumeratorAggregation.WinsorizationStrategy == nil || *ratio.NumeratorAggregation.WinsorizationStrategy != "all_assigned_subjects" || ratio.DenominatorAggregation.WinsorizationStrategy == nil || *ratio.DenominatorAggregation.WinsorizationStrategy != "nonzero" {
+		t.Fatalf("unexpected ratio strategies: %#v", ratio)
 	}
 	if ratio.NumeratorAggregation.Operation != "threshold" {
 		t.Fatalf("numerator operation = %q, want threshold", ratio.NumeratorAggregation.Operation)

@@ -326,7 +326,7 @@ func TestAdditionalTimestampColumns(t *testing.T) {
 			config := thresholdConfig(model.Metric{})
 			config.Metrics = nil
 			config.WarehouseMetricSources[0].AdditionalTimestampColumns = tc.columns
-			issues := ValidateFiles([]model.FileConfig{{Path: "timestamps-and-winsorization.yaml", Config: config}})
+			issues := ValidateFiles([]model.FileConfig{{Path: "metric-sync.yaml", Config: config}})
 			assertValidationIssue(t, issues, "warehouse_metric_sources[0].", tc.path, tc.message)
 		})
 	}
@@ -384,7 +384,7 @@ func TestWinsorizationStrategyAndBounds(t *testing.T) {
 					}
 					prefix = "metrics[0].ratio_metric_aggregation." + location + "_aggregation."
 				}
-				issues := ValidateFiles([]model.FileConfig{{Path: "timestamps-and-winsorization.yaml", Config: thresholdConfig(metric)}})
+				issues := ValidateFiles([]model.FileConfig{{Path: "metric-sync.yaml", Config: thresholdConfig(metric)}})
 				assertValidationIssue(t, issues, prefix, tc.path, tc.message)
 			})
 		}
@@ -399,7 +399,7 @@ func assertValidationIssue(t *testing.T, issues []Issue, prefix, path, message s
 		}
 		return
 	}
-	if len(issues) != 1 || issues[0].File != "timestamps-and-winsorization.yaml" || issues[0].Path != prefix+path || !strings.Contains(issues[0].Message, message) {
-		t.Fatalf("expected timestamps-and-winsorization.yaml: %s%s: %s, got %v", prefix, path, message, issues)
+	if len(issues) != 1 || issues[0].File != "metric-sync.yaml" || issues[0].Path != prefix+path || !strings.Contains(issues[0].Message, message) {
+		t.Fatalf("expected metric-sync.yaml: %s%s: %s, got %v", prefix, path, message, issues)
 	}
 }
