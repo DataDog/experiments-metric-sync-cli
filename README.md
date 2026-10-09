@@ -65,38 +65,9 @@ metric-sync version
 checks an operation by ID. `result` fetches the terminal plan or execute result.
 `version` prints build metadata.
 
-### Measure references
-
-Select a source with `warehouse_metric_source_sync_id` and exactly one measure:
-
-```yaml
-# Count rows in the source.
-operation: count
-measure:
-  warehouse_metric_source_sync_id: checkout_events
-  kind: each_record
-```
-
-```yaml
-# Count distinct values in the source's User subject column.
-operation: countDistinctValue
-measure:
-  warehouse_metric_source_sync_id: checkout_events
-  subject_type_name: User
-```
-
-The second form requires a `subject_types` entry with `name: User` on the source.
-Use `measure_sync_id` for a declared measure, such as revenue. `countDistinctValue`
-also accepts a declared measure; it cannot use `each_record`. `sum` and `average`
-require a declared measure. These selector rules also apply to ratio components.
-See [the complete example](examples/minimal.yaml).
-
-For a source in another sync tag, also set `warehouse_metric_source_sync_tag`.
-`validate` checks the reference shape and operation locally. `plan` checks that
-the external source and measure exist. An explicit tag that matches this file's
-`sync_tag` still checks local mappings when the source is in the submitted files.
-The sync API does not support `warehouse_metric_measure_id`; replace it with one
-of the three selectors above.
+For YAML fields and measure references, see
+[Sync Experiment Metrics from YAML](https://docs.datadoghq.com/experiments/defining_metrics/metric_sync/#yaml-reference).
+See [examples](examples/) for complete YAML files.
 
 ## Idempotency
 
