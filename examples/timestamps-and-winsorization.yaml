@@ -7,6 +7,8 @@ warehouse_metric_sources:
       SELECT USER_ID, BOOKING_DATETIME_UTC, FIRST_TRANSACTION_DATETIME_UTC, REVENUE
       FROM analytics.bookings
     timestamp_column: BOOKING_DATETIME_UTC
+    # Optional: at most four unique columns, excluding timestamp_column.
+    # Omission means no additional timestamps.
     additional_timestamp_columns:
       - FIRST_TRANSACTION_DATETIME_UTC
     subject_types:
@@ -18,7 +20,6 @@ warehouse_metric_sources:
         column_name: REVENUE
         column_type: FLOAT
 metrics:
-  # Illustrative settings. Copy the actual settings from each existing metric.
   - sync_id: booking_revenue
     name: Booking revenue
     metric_type: simple
@@ -28,10 +29,13 @@ metrics:
         warehouse_metric_source_sync_id: bookings
         measure_sync_id: revenue
       winsor_upper_percentile: 0.99
+      # Optional: all_assigned_subjects (default) or nonzero.
+      # Threshold aggregations only accept the default strategy.
       winsorization_strategy: nonzero
   - sync_id: capped_booking_revenue_share
     name: Capped booking revenue share
     metric_type: ratio
+    # Each ratio aggregation can specify its own strategy.
     ratio_metric_aggregation:
       numerator_aggregation:
         operation: sum

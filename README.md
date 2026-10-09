@@ -74,38 +74,3 @@ re-running the same file starts a new operation instead of replaying an old one.
 
 Use `--idempotency-key` only when you intentionally want to replay or debug a
 specific request.
-
-## Preserve existing metric settings
-
-Copy the current settings into YAML before you adopt an existing source or metric.
-Omitted fields use API defaults; they do not preserve the current UI settings.
-
-On a source, `additional_timestamp_columns` lists extra timestamp columns:
-
-```yaml
-timestamp_column: BOOKING_DATETIME_UTC
-additional_timestamp_columns:
-  - FIRST_TRANSACTION_DATETIME_UTC
-```
-
-The source SQL must return these columns. The list can contain at most four
-unique, nonblank names, each at most 255 characters. It cannot include the
-primary `timestamp_column`. Omission or an empty list means no extra timestamps.
-
-Set `winsorization_strategy` inside `simple_metric_aggregation`, or separately
-inside each ratio `numerator_aggregation` and `denominator_aggregation`:
-
-```yaml
-winsor_upper_percentile: 0.99
-winsorization_strategy: nonzero
-```
-
-`nonzero` calculates percentile cutoffs from nonzero values. The other strategy,
-`all_assigned_subjects`, is the default when the field is omitted. These values
-are examples; use the actual strategy and bounds from your metric. Percentiles
-must be between 0 and 1, and the lower percentile must be less than the upper
-percentile. For `threshold`, omit all winsorization bounds and either omit the
-strategy or set it to `all_assigned_subjects`.
-
-See [settings.yaml](examples/settings.yaml) for a complete example with a simple
-metric and a ratio metric. Run `validate`, then review `plan` before `execute`.
