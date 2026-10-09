@@ -66,6 +66,25 @@ func validateSource(add func(string, string), path string, source model.Warehous
 	require(add, path+".name", source.Name)
 	require(add, path+".sql", source.SQL)
 	require(add, path+".timestamp_column", source.TimestampColumn)
+	if len(source.AdditionalTimestampColumns) > 4 {
+		add(path+".additional_timestamp_columns", "must contain at most 4 columns")
+	}
+	timestamps := map[string]bool{strings.TrimSpace(source.TimestampColumn): true}
+	for i, column := range source.AdditionalTimestampColumns {
+		columnPath := fmt.Sprintf("%s.additional_timestamp_columns[%d]", path, i)
+		require(add, columnPath, column)
+		if len(column) > 255 {
+			add(columnPath, "must contain at most 255 characters")
+		}
+		column = strings.TrimSpace(column)
+		if column == "" {
+			continue
+		}
+		if timestamps[column] {
+			add(columnPath, "must be unique and cannot include timestamp_column")
+		}
+		timestamps[column] = true
+	}
 
 	for i, subject := range source.SubjectTypes {
 		require(add, fmt.Sprintf("%s.subject_types[%d].name", path, i), subject.Name)
@@ -120,6 +139,22 @@ func validateMetric(add func(string, string), path string, metric model.Metric) 
 func validateAggregation(add func(string, string), path string, agg *model.SimpleMetricAggregation) {
 	if agg == nil {
 		return
+	}
+	if agg.WinsorizationStrategy != nil {
+		if !oneOf(*agg.WinsorizationStrategy, "all_assigned_subjects", "nonzero") {
+			add(path+".winsorization_strategy", "must be all_assigned_subjects or nonzero")
+		} else if agg.Operation == "threshold" && *agg.WinsorizationStrategy != "all_assigned_subjects" {
+			add(path+".winsorization_strategy", "must be all_assigned_subjects or omitted when operation is threshold")
+		}
+	}
+	if agg.WinsorLowerPercentile != nil && (*agg.WinsorLowerPercentile < 0 || *agg.WinsorLowerPercentile > 1) {
+		add(path+".winsor_lower_percentile", "must be between 0 and 1")
+	}
+	if agg.WinsorUpperPercentile != nil && (*agg.WinsorUpperPercentile < 0 || *agg.WinsorUpperPercentile > 1) {
+		add(path+".winsor_upper_percentile", "must be between 0 and 1")
+	}
+	if agg.WinsorLowerPercentile != nil && agg.WinsorUpperPercentile != nil && *agg.WinsorLowerPercentile >= *agg.WinsorUpperPercentile {
+		add(path+".winsor_lower_percentile", "must be less than winsor_upper_percentile")
 	}
 	if agg.Operation != "threshold" {
 		validateNoThresholdFields(add, path, agg)
