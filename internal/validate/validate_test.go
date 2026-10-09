@@ -171,7 +171,7 @@ func TestValidateThresholdRatioComponents(t *testing.T) {
 				},
 				DenominatorAggregation: model.SimpleMetricAggregation{
 					Operation: "count",
-					Measure:   model.MeasureRef{MeasureSyncID: "m", WarehouseMetricSourceSyncID: "src"},
+					Measure:   model.MeasureRef{Kind: "each_record", WarehouseMetricSourceSyncID: "src"},
 				},
 			},
 		}),
@@ -195,7 +195,7 @@ func TestValidateThresholdRatioComponentMissingFields(t *testing.T) {
 				},
 				DenominatorAggregation: model.SimpleMetricAggregation{
 					Operation: "count",
-					Measure:   model.MeasureRef{MeasureSyncID: "m", WarehouseMetricSourceSyncID: "src"},
+					Measure:   model.MeasureRef{Kind: "each_record", WarehouseMetricSourceSyncID: "src"},
 				},
 			},
 		}),

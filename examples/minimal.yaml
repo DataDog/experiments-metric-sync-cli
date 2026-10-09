@@ -27,3 +27,37 @@ metrics:
         warehouse_metric_source_sync_id: checkout_events
         measure_sync_id: revenue
       timeframe_start_value: 0
+  - sync_id: checkout_count
+    name: Checkout count
+    metric_type: simple
+    simple_metric_aggregation:
+      operation: count
+      measure:
+        warehouse_metric_source_sync_id: checkout_events
+        kind: each_record
+      timeframe_start_value: 0
+  - sync_id: checkout_users
+    name: Distinct checkout users
+    metric_type: simple
+    simple_metric_aggregation:
+      operation: countDistinctValue
+      measure:
+        warehouse_metric_source_sync_id: checkout_events
+        subject_type_name: User
+      timeframe_start_value: 0
+  - sync_id: checkouts_per_user
+    name: Checkouts per user
+    metric_type: ratio
+    ratio_metric_aggregation:
+      numerator_aggregation:
+        operation: count
+        measure:
+          warehouse_metric_source_sync_id: checkout_events
+          kind: each_record
+        timeframe_start_value: 0
+      denominator_aggregation:
+        operation: countDistinctValue
+        measure:
+          warehouse_metric_source_sync_id: checkout_events
+          subject_type_name: User
+        timeframe_start_value: 0

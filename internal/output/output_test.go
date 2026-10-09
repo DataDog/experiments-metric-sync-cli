@@ -163,7 +163,7 @@ func TestPrintValidationText(t *testing.T) {
 		t.Fatal(err)
 	}
 	assertContains(t, success.String(), "Validation\n")
-	assertContains(t, success.String(), "  Status     passed\n")
+	assertContains(t, success.String(), "  Status     passed (local checks)\n")
 	assertNoANSI(t, success.String())
 
 	var failure bytes.Buffer
