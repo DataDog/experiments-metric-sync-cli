@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/DataDog/experiments-metric-sync-cli/internal/model"
 )
@@ -73,7 +74,7 @@ func validateSource(add func(string, string), path string, source model.Warehous
 	for i, column := range source.AdditionalTimestampColumns {
 		columnPath := fmt.Sprintf("%s.additional_timestamp_columns[%d]", path, i)
 		require(add, columnPath, column)
-		if len(column) > 255 {
+		if utf8.RuneCountInString(column) > 255 {
 			add(columnPath, "must contain at most 255 characters")
 		}
 		column = strings.TrimSpace(column)
