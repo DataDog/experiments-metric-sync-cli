@@ -44,19 +44,20 @@ type SyncConfig struct {
 }
 
 type WarehouseMetricSource struct {
-	SyncID                string              `json:"sync_id" yaml:"sync_id"`
-	ExistingID            string              `json:"existing_id,omitempty" yaml:"existing_id,omitempty"`
-	Name                  string              `json:"name" yaml:"name"`
-	Description           string              `json:"description,omitempty" yaml:"description,omitempty"`
-	SQL                   string              `json:"sql" yaml:"sql"`
-	TimestampColumn       string              `json:"timestamp_column" yaml:"timestamp_column"`
-	DatePartitionColumn   string              `json:"date_partition_column,omitempty" yaml:"date_partition_column,omitempty"`
-	ReferenceURL          string              `json:"reference_url,omitempty" yaml:"reference_url,omitempty"`
-	WarehouseConnectionID string              `json:"warehouse_connection_id,omitempty" yaml:"warehouse_connection_id,omitempty"`
-	ForceRebuildAlways    bool                `json:"force_rebuild_always,omitempty" yaml:"force_rebuild_always,omitempty"`
-	SubjectTypes          []SourceSubjectType `json:"subject_types,omitempty" yaml:"subject_types,omitempty"`
-	Measures              []Measure           `json:"measures,omitempty" yaml:"measures,omitempty"`
-	Properties            []Property          `json:"properties,omitempty" yaml:"properties,omitempty"`
+	SyncID                     string              `json:"sync_id" yaml:"sync_id"`
+	ExistingID                 string              `json:"existing_id,omitempty" yaml:"existing_id,omitempty"`
+	Name                       string              `json:"name" yaml:"name"`
+	Description                string              `json:"description,omitempty" yaml:"description,omitempty"`
+	SQL                        string              `json:"sql" yaml:"sql"`
+	TimestampColumn            string              `json:"timestamp_column" yaml:"timestamp_column"`
+	AdditionalTimestampColumns []string            `json:"additional_timestamp_columns,omitempty" yaml:"additional_timestamp_columns,omitempty"`
+	DatePartitionColumn        string              `json:"date_partition_column,omitempty" yaml:"date_partition_column,omitempty"`
+	ReferenceURL               string              `json:"reference_url,omitempty" yaml:"reference_url,omitempty"`
+	WarehouseConnectionID      string              `json:"warehouse_connection_id,omitempty" yaml:"warehouse_connection_id,omitempty"`
+	ForceRebuildAlways         bool                `json:"force_rebuild_always,omitempty" yaml:"force_rebuild_always,omitempty"`
+	SubjectTypes               []SourceSubjectType `json:"subject_types,omitempty" yaml:"subject_types,omitempty"`
+	Measures                   []Measure           `json:"measures,omitempty" yaml:"measures,omitempty"`
+	Properties                 []Property          `json:"properties,omitempty" yaml:"properties,omitempty"`
 }
 
 type SourceSubjectType struct {
@@ -106,6 +107,7 @@ type SimpleMetricAggregation struct {
 	WinsorUpperPercentile *float64         `json:"winsor_upper_percentile,omitempty" yaml:"winsor_upper_percentile,omitempty"`
 	WinsorLowerFixedValue *float64         `json:"winsor_lower_fixed_value,omitempty" yaml:"winsor_lower_fixed_value,omitempty"`
 	WinsorUpperFixedValue *float64         `json:"winsor_upper_fixed_value,omitempty" yaml:"winsor_upper_fixed_value,omitempty"`
+	WinsorizationStrategy *string          `json:"winsorization_strategy,omitempty" yaml:"winsorization_strategy,omitempty"`
 	// Threshold aggregation fields. Type, comparison operator, and breach value are
 	// required when operation is "threshold"; timeframe fields are optional as a pair.
 	ThresholdAggregationType    string   `json:"threshold_aggregation_type,omitempty" yaml:"threshold_aggregation_type,omitempty"`
