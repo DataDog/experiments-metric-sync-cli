@@ -137,6 +137,8 @@ func TestBuildPreservesThresholdFields(t *testing.T) {
 }
 
 func TestBuildSerializesCanonicalRatioAggregationKeys(t *testing.T) {
+	nonzero := "nonzero"
+	allSubjects := "all_assigned_subjects"
 	files := []model.FileConfig{{
 		Path: "ratio.yaml",
 		Config: model.SyncConfig{
@@ -147,9 +149,10 @@ func TestBuildSerializesCanonicalRatioAggregationKeys(t *testing.T) {
 				Name:       "metric",
 				MetricType: "ratio",
 				RatioMetricAggregation: &model.RatioMetricAggregation{
-					NumeratorAggregation: model.SimpleMetricAggregation{Operation: "sum"},
+					NumeratorAggregation: model.SimpleMetricAggregation{Operation: "sum", WinsorizationStrategy: &nonzero},
 					DenominatorAggregation: model.SimpleMetricAggregation{
-						Operation: "count",
+						Operation:             "count",
+						WinsorizationStrategy: &allSubjects,
 					},
 				},
 			}},
@@ -176,6 +179,9 @@ func TestBuildSerializesCanonicalRatioAggregationKeys(t *testing.T) {
 	}
 	if _, ok := ratio["denominator_aggregation"]; !ok {
 		t.Fatalf("serialized ratio is missing denominator_aggregation: %s", body)
+	}
+	if ratio["numerator_aggregation"].(map[string]any)["winsorization_strategy"] != nonzero || ratio["denominator_aggregation"].(map[string]any)["winsorization_strategy"] != allSubjects {
+		t.Fatalf("unexpected ratio strategies: %s", body)
 	}
 	if _, ok := ratio["numerator"]; ok {
 		t.Fatalf("serialized ratio contains legacy numerator key: %s", body)

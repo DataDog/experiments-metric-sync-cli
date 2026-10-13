@@ -5,9 +5,12 @@ warehouse_metric_sources:
   - sync_id: checkout_events
     name: Checkout events
     sql: |
-      SELECT user_id, event_timestamp, revenue
+      SELECT user_id, event_timestamp, transaction_timestamp, revenue
       FROM analytics.checkout_events
     timestamp_column: event_timestamp
+    # Optional; omission means no additional timestamps.
+    additional_timestamp_columns:
+      - transaction_timestamp
     subject_types:
       - name: User
         column_name: user_id
@@ -27,3 +30,6 @@ metrics:
         warehouse_metric_source_sync_id: checkout_events
         measure_sync_id: revenue
       timeframe_start_value: 0
+      winsor_upper_percentile: 0.99
+      # Optional: all_assigned_subjects (default) or nonzero.
+      winsorization_strategy: nonzero
