@@ -4,26 +4,14 @@
 
 package model
 
-import (
-	"bytes"
-	"fmt"
-
-	"gopkg.in/yaml.v3"
-)
+import "fmt"
 
 // PropertyFilters is an OR of groups. Each group is an AND of filters.
 type PropertyFilters [][]PropertyFilter
 
-func (f *PropertyFilters) UnmarshalYAML(node *yaml.Node) error {
-	if node.Kind != yaml.SequenceNode {
-		return fmt.Errorf("line %d: property_filters must be a list of filter groups", node.Line)
-	}
-	for _, group := range node.Content {
-		if group.Kind != yaml.SequenceNode {
-			return fmt.Errorf("line %d: property_filters requires nested lists; place AND conditions in one group and OR conditions in separate groups", group.Line)
-		}
-	}
-	// Keep strict field checks inside the custom decoder, including references.
+// Use the decoder callback to retain strict field checks, scalar text, and
+// alias handling from the caller's YAML decoder.
+func (f *PropertyFilters) UnmarshalYAML(unmarshal func(any) error) error {
 	type filterInput struct {
 		Property  *PropertyRef `yaml:"property"`
 		Measure   *MeasureRef  `yaml:"measure"`
@@ -31,19 +19,9 @@ func (f *PropertyFilters) UnmarshalYAML(node *yaml.Node) error {
 		Operator  *string      `yaml:"operator"`
 		Values    []string     `yaml:"values"`
 	}
-	var resolved any
-	if err := node.Decode(&resolved); err != nil {
-		return fmt.Errorf("property_filters: %w", err)
-	}
-	data, err := yaml.Marshal(resolved)
-	if err != nil {
-		return err
-	}
-	decoder := yaml.NewDecoder(bytes.NewReader(data))
-	decoder.KnownFields(true)
 	var groups [][]filterInput
-	if err := decoder.Decode(&groups); err != nil {
-		return fmt.Errorf("property_filters: %w", err)
+	if err := unmarshal(&groups); err != nil {
+		return fmt.Errorf("property_filters: %w; use nested lists with AND conditions in each group and OR conditions between groups", err)
 	}
 	result := make(PropertyFilters, len(groups))
 	for i, group := range groups {

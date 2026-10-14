@@ -72,61 +72,78 @@ metrics:
 `
 
 func TestFilterRequestBody(t *testing.T) {
-	for _, command := range []string{"validate", "plan", "execute"} {
-		t.Run(command, func(t *testing.T) {
-			path := filepath.Join(t.TempDir(), "filters.yaml")
-			if err := os.WriteFile(path, []byte(filterYAML), 0600); err != nil {
-				t.Fatal(err)
-			}
-			var received map[string]any
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				if r.Method != http.MethodPost || r.URL.Path != "/api/unstable/ffe/metric-syncs" {
-					t.Errorf("unexpected request: %s %s", r.Method, r.URL)
-					w.WriteHeader(500)
+	groupAliases := strings.Replace(filterYAML, "        - - property: &property", "        - &common_group\n          - property: &property", 1)
+	groupAliases = strings.Replace(groupAliases, "        - - property: *property", "        - &other_group\n          - property: *property", 1)
+	groupAliases = strings.Replace(groupAliases, "property_filters: *filters", "property_filters: [*common_group, *other_group]", 1)
+	referenceIDs := strings.ReplaceAll(filterYAML, ": source", ": 001")
+	referenceIDs = strings.ReplaceAll(referenceIDs, "sync_id: country", "sync_id: 002")
+	scalarValues := strings.Replace(filterYAML, "name: Events", "name: &code 001", 1)
+	scalarValues = strings.Replace(scalarValues, "values: [US, CA]", "values: [001, 1.00, 1e3, 2026-10-14, True, *code]", 1)
+	for _, tc := range []struct {
+		name, input, sourceID, propertyID string
+		values                            []any
+	}{
+		{"standard", filterYAML, "source", "country", []any{"US", "CA"}},
+		{"reference text", referenceIDs, "001", "002", []any{"US", "CA"}},
+		{"scalar text", scalarValues, "source", "country", []any{"001", "1.00", "1e3", "2026-10-14", "True", "001"}},
+		{"group aliases", groupAliases, "source", "country", []any{"US", "CA"}},
+	} {
+		for _, command := range []string{"validate", "plan", "execute"} {
+			t.Run(tc.name+"/"+command, func(t *testing.T) {
+				path := filepath.Join(t.TempDir(), "filters.yaml")
+				if err := os.WriteFile(path, []byte(tc.input), 0600); err != nil {
+					t.Fatal(err)
+				}
+				var received map[string]any
+				server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					if r.Method != http.MethodPost || r.URL.Path != "/api/unstable/ffe/metric-syncs" {
+						t.Errorf("unexpected request: %s %s", r.Method, r.URL)
+						w.WriteHeader(500)
+						return
+					}
+					if err := json.NewDecoder(r.Body).Decode(&received); err != nil {
+						t.Error(err)
+					}
+					writeOperation(t, w, "operation-id", "filters", command, "queued")
+				}))
+				defer server.Close()
+				t.Setenv("DD_API_KEY", "api")
+				t.Setenv("DD_APP_KEY", "app")
+				var stdout, stderr bytes.Buffer
+				args := []string{command, path, "--site", server.URL, "--log-file", filepath.Join(t.TempDir(), "test.log")}
+				if command != "validate" {
+					args = append(args, "--no-poll")
+				}
+				if code := runWithIO(args, VersionInfo{Version: "test"}, &stdout, &stderr); code != 0 {
+					t.Fatalf("exit %d: %s %s", code, &stdout, &stderr)
+				}
+				if command == "validate" {
+					if received != nil {
+						t.Fatal("validate called API")
+					}
 					return
 				}
-				if err := json.NewDecoder(r.Body).Decode(&received); err != nil {
-					t.Error(err)
+				property := received["warehouse_metric_sources"].([]any)[0].(map[string]any)["properties"].([]any)[0]
+				wantProperty := map[string]any{"sync_id": tc.propertyID, "property_name": "Country", "property_column": "country", "property_type": "STRING"}
+				if !reflect.DeepEqual(property, wantProperty) {
+					t.Fatalf("property = %#v", property)
 				}
-				writeOperation(t, w, "operation-id", "filters", command, "queued")
-			}))
-			defer server.Close()
-			t.Setenv("DD_API_KEY", "api")
-			t.Setenv("DD_APP_KEY", "app")
-			var stdout, stderr bytes.Buffer
-			args := []string{command, path, "--site", server.URL, "--log-file", filepath.Join(t.TempDir(), "test.log")}
-			if command != "validate" {
-				args = append(args, "--no-poll")
-			}
-			if code := runWithIO(args, VersionInfo{Version: "test"}, &stdout, &stderr); code != 0 {
-				t.Fatalf("exit %d: %s %s", code, &stdout, &stderr)
-			}
-			if command == "validate" {
-				if received != nil {
-					t.Fatal("validate called API")
+				ref := map[string]any{"warehouse_metric_source_sync_id": tc.sourceID, "property_sync_id": tc.propertyID}
+				wantFilters := []any{
+					[]any{map[string]any{"property": ref, "operation": "IS", "values": tc.values}, map[string]any{"property": ref, "operation": "IS_NOT", "values": []any{"FR"}}},
+					[]any{map[string]any{"property": ref, "operation": "IS", "values": []any{"GB"}}},
 				}
-				return
-			}
-			property := received["warehouse_metric_sources"].([]any)[0].(map[string]any)["properties"].([]any)[0]
-			wantProperty := map[string]any{"sync_id": "country", "property_name": "Country", "property_column": "country", "property_type": "STRING"}
-			if !reflect.DeepEqual(property, wantProperty) {
-				t.Fatalf("property = %#v", property)
-			}
-			ref := map[string]any{"warehouse_metric_source_sync_id": "source", "property_sync_id": "country"}
-			wantFilters := []any{
-				[]any{map[string]any{"property": ref, "operation": "IS", "values": []any{"US", "CA"}}, map[string]any{"property": ref, "operation": "IS_NOT", "values": []any{"FR"}}},
-				[]any{map[string]any{"property": ref, "operation": "IS", "values": []any{"GB"}}},
-			}
-			metrics := received["metrics"].([]any)
-			simple := metrics[0].(map[string]any)["simple_metric_aggregation"].(map[string]any)
-			ratio := metrics[1].(map[string]any)["ratio_metric_aggregation"].(map[string]any)
-			percentile := metrics[2].(map[string]any)["percentile_metric_aggregation"].(map[string]any)
-			for _, agg := range []map[string]any{simple, ratio["numerator_aggregation"].(map[string]any), ratio["denominator_aggregation"].(map[string]any), percentile} {
-				if !reflect.DeepEqual(agg["property_filters"], wantFilters) {
-					t.Errorf("filters = %#v", agg["property_filters"])
+				metrics := received["metrics"].([]any)
+				simple := metrics[0].(map[string]any)["simple_metric_aggregation"].(map[string]any)
+				ratio := metrics[1].(map[string]any)["ratio_metric_aggregation"].(map[string]any)
+				percentile := metrics[2].(map[string]any)["percentile_metric_aggregation"].(map[string]any)
+				for _, agg := range []map[string]any{simple, ratio["numerator_aggregation"].(map[string]any), ratio["denominator_aggregation"].(map[string]any), percentile} {
+					if !reflect.DeepEqual(agg["property_filters"], wantFilters) {
+						t.Errorf("filters = %#v", agg["property_filters"])
+					}
 				}
-			}
-		})
+			})
+		}
 	}
 }
 
