@@ -119,6 +119,10 @@ See [the filter example](examples/filters.yaml).
 The `operator` field remains an alias for `operation`. These changes require a release newer than
 v0.1.1; they are available when building this branch from source.
 
+Use one YAML document per file. To split definitions, use multiple files in the
+same directory with the same sync tag and options. Additional documents after a
+`---` separator are rejected before validation or submission.
+
 ## Idempotency
 
 The CLI sends an `Idempotency-Key` for `plan` and `execute` requests. In CI, the

@@ -7,6 +7,7 @@ package yamlutil
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"os"
 
 	"github.com/DataDog/experiments-metric-sync-cli/internal/model"
@@ -39,6 +40,13 @@ func LoadFile(path string) (model.SyncConfig, error) {
 	var config model.SyncConfig
 	if err := decoder.Decode(&config); err != nil {
 		return model.SyncConfig{}, fmt.Errorf("parse %s: %w", path, err)
+	}
+	var extra yaml.Node
+	if err := decoder.Decode(&extra); err != io.EOF {
+		if err != nil {
+			return model.SyncConfig{}, fmt.Errorf("parse %s after the first YAML document: %w", path, err)
+		}
+		return model.SyncConfig{}, fmt.Errorf("parse %s: only one YAML document is allowed per file; move additional documents to separate files", path)
 	}
 	config.Options = config.Options.WithDefaults()
 	return config, nil
