@@ -12,9 +12,9 @@ warehouse_metric_sources:
         column_type: FLOAT
     properties:
       - sync_id: country
-        name: Country
-        column_name: country
-        column_type: STRING
+        property_name: Country
+        property_column: country
+        property_type: STRING
 metrics:
   - sync_id: simple
     name: Simple

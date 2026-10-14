@@ -101,9 +101,9 @@ func validateSource(add func(string, string), path string, source model.Warehous
 	for i, property := range source.Properties {
 		prefix := fmt.Sprintf("%s.properties[%d]", path, i)
 		requireSyncID(add, prefix+".sync_id", property.SyncID)
-		require(add, prefix+".name", property.Name)
-		require(add, prefix+".column_name", property.ColumnName)
-		require(add, prefix+".column_type", property.ColumnType)
+		require(add, prefix+".property_name", property.Name)
+		require(add, prefix+".property_column", property.ColumnName)
+		require(add, prefix+".property_type", property.ColumnType)
 	}
 }
 

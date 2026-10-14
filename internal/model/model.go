@@ -75,9 +75,9 @@ type Measure struct {
 
 type Property struct {
 	SyncID      string `json:"sync_id" yaml:"sync_id"`
-	Name        string `json:"property_name" yaml:"name"`
-	ColumnName  string `json:"property_column" yaml:"column_name"`
-	ColumnType  string `json:"property_type" yaml:"column_type"`
+	Name        string `json:"property_name" yaml:"property_name"`
+	ColumnName  string `json:"property_column" yaml:"property_column"`
+	ColumnType  string `json:"property_type" yaml:"property_type"`
 	Description string `json:"description,omitempty" yaml:"description,omitempty"`
 }
 

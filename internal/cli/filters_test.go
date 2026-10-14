@@ -32,9 +32,9 @@ warehouse_metric_sources:
         column_type: FLOAT
     properties:
       - sync_id: country
-        name: Country
-        column_name: country
-        column_type: STRING
+        property_name: Country
+        property_column: country
+        property_type: STRING
 metrics:
   - sync_id: simple
     name: Simple
@@ -150,6 +150,12 @@ func TestFilterRequestBody(t *testing.T) {
 func TestInvalidFiltersDoNotCallAPI(t *testing.T) {
 	for _, tc := range []struct{ name, old, replacement, want string }{
 		{"flat list", "        - - property: &property", "        - property: &property", "parse"},
+		{"old property name", "property_name: Country", "name: Country", "field name not found"},
+		{"old property column", "property_column: country", "column_name: country", "field column_name not found"},
+		{"old property type", "property_type: STRING", "column_type: STRING", "field column_type not found"},
+		{"missing property name", "property_name: Country", "property_name: ''", "properties[0].property_name: is required"},
+		{"missing property column", "property_column: country", "property_column: ''", "properties[0].property_column: is required"},
+		{"missing property type", "property_type: STRING", "property_type: ''", "properties[0].property_type: is required"},
 		{"unknown filter field", "operation: IS\n", "operatoin: IS\n", "property_filters"},
 		{"unknown reference field", "property_sync_id: country", "property_snyc_id: country", "property_filters"},
 		{"conflicting aliases", "operator: IS_NOT", "operator: IS_NOT\n            operation: IS", "not both"},

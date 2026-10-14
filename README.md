@@ -71,10 +71,12 @@ See [examples](examples/) for complete YAML files.
 
 ### Properties and filters
 
-Source properties use `name`, `column_name`, and `column_type` in YAML. The CLI
-sends these as `property_name`, `property_column`, and `property_type` in API
-requests. Use `property_sync_id` and `warehouse_metric_source_sync_id` to reference
-a property in a filter.
+Source properties use `property_name`, `property_column`, and `property_type`
+in both YAML and API requests. Rename the previous YAML fields `name`,
+`column_name`, and `column_type` on properties to these API names. The old
+property field names are rejected. Measure fields remain `name`, `column_name`,
+and `column_type`. Use `property_sync_id` and `warehouse_metric_source_sync_id`
+to reference a property in a filter.
 
 `property_filters` is a list of groups. Conditions within a group use AND;
 groups use OR. Use `operation: IS` or `operation: IS_NOT` with a nonempty list
