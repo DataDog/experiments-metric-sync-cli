@@ -299,18 +299,19 @@ func (a *app) runSubmit(ctx context.Context, operation string, positional []stri
 		return a.fail(1, err)
 	}
 	a.info("terminal operation", slog.Any("operation", *terminal))
-	if api.IsFailureStatus(terminal.Status) {
-		_ = output.PrintOperation(a.stdout, terminal)
-		return exitError{code: 1}
-	}
 	result, err := client.GetResult(submitCtx, terminal.MetricSyncID)
 	if err != nil {
-		return a.fail(1, err)
+		_ = output.PrintOperation(a.stdout, terminal)
+		return a.fail(1, fmt.Errorf("metric sync %s has status %s; result details are unavailable: %w", terminal.MetricSyncID, terminal.Status, err))
+	}
+	// The terminal status is authoritative if the result is stale or incomplete.
+	if api.IsFailureStatus(terminal.Status) {
+		result.Status = terminal.Status
 	}
 	if err := output.PrintResult(a.stdout, result); err != nil {
 		return a.fail(1, err)
 	}
-	if operation == "execute" && api.CountBucket(result.Blocked) > 0 {
+	if resultFailed(result) {
 		return exitError{code: 1}
 	}
 	return nil
@@ -393,6 +394,9 @@ func (a *app) runResult(ctx context.Context, metricSyncID string) error {
 	}
 	if err := output.PrintResult(a.stdout, result); err != nil {
 		return a.fail(1, err)
+	}
+	if resultFailed(result) {
+		return exitError{code: 1}
 	}
 	return nil
 }
@@ -506,4 +510,8 @@ func logFilePathFromArgs(args []string) string {
 		}
 	}
 	return logfile.DefaultPath
+}
+
+func resultFailed(result *api.Result) bool {
+	return api.IsFailureStatus(result.Status) || !api.IsTerminalStatus(result.Status) || api.CountBucket(result.Blocked) > 0 || len(result.Errors) > 0
 }

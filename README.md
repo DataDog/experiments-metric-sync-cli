@@ -54,7 +54,13 @@ metric-sync execute ./metrics
 `execute` discovers metric sync YAML files, validates them locally, submits a
 write operation to the Metric Sync API, polls until the operation reaches a
 terminal state, and prints the created, updated, deleted, upgraded, blocked, and
-error counts.
+error counts. It also shows object IDs, setting changes, blocked reasons, server
+warnings, and available errors. Plans show proposed changes. A failed result does
+not confirm that its proposed changes were applied.
+
+A blocked plan or execute result exits nonzero, as does a failed operation. The
+`result` command uses the same exit behavior. With `--no-poll`, exit zero confirms
+only submission; use `status` and `result` to check completion.
 
 Other commands:
 
