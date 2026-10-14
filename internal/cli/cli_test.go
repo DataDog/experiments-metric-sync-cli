@@ -436,15 +436,18 @@ func writeOperation(t *testing.T, w http.ResponseWriter, id string, syncTag stri
 	}
 }
 
-func TestCommandsRejectInvalidTimestampAndWinsorizationFieldsBeforeAPIRequest(t *testing.T) {
+func TestCommandsRejectInvalidFieldsBeforeAPIRequest(t *testing.T) {
 	example, err := os.ReadFile(writeValidYAML(t))
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, tc := range []struct{ name, old, replacement, path string }{
-		{"strategy", "winsorization_strategy: nonzero", `winsorization_strategy: ""`, "metrics[0].simple_metric_aggregation.winsorization_strategy"},
-		{"duplicate timestamp", "      - TRANSACTION_TIMESTAMP", "      - TRANSACTION_TIMESTAMP\n      - TRANSACTION_TIMESTAMP", "warehouse_metric_sources[0].additional_timestamp_columns[1]"},
-		{"too many timestamps", "      - TRANSACTION_TIMESTAMP", "      - a\n      - b\n      - c\n      - d\n      - e", "warehouse_metric_sources[0].additional_timestamp_columns"},
+	for _, tc := range []struct{ name, old, replacement, path, message string }{
+		{"strategy", "winsorization_strategy: nonzero", `winsorization_strategy: ""`, "metrics[0].simple_metric_aggregation.winsorization_strategy", "must be all_assigned_subjects or nonzero"},
+		{"duplicate timestamp", "      - TRANSACTION_TIMESTAMP", "      - TRANSACTION_TIMESTAMP\n      - TRANSACTION_TIMESTAMP", "warehouse_metric_sources[0].additional_timestamp_columns[1]", "must be unique"},
+		{"too many timestamps", "      - TRANSACTION_TIMESTAMP", "      - a\n      - b\n      - c\n      - d\n      - e", "warehouse_metric_sources[0].additional_timestamp_columns", "must contain at most 4"},
+		{"raw measure ID", "measure_sync_id: value", "warehouse_metric_measure_id: raw-id", "metrics[0].simple_metric_aggregation.measure.warehouse_metric_measure_id", "not supported by the sync API"},
+		{"wrong measure operation", "measure_sync_id: value", "kind: each_record", "metrics[0].simple_metric_aggregation.operation", "sum requires a user-defined measure"},
+		{"unknown subject", "measure_sync_id: value", "subject_type_name: Missing", "metrics[0].simple_metric_aggregation.measure.subject_type_name", "does not match subject_types[].name"},
 	} {
 		for _, command := range []string{"validate", "plan", "execute"} {
 			t.Run(command+"/"+tc.name, func(t *testing.T) {
@@ -463,10 +466,90 @@ func TestCommandsRejectInvalidTimestampAndWinsorizationFieldsBeforeAPIRequest(t 
 				var stdout, stderr bytes.Buffer
 				code := runWithIO([]string{command, path, "--site", server.URL, "--log-file", filepath.Join(t.TempDir(), "test.log")}, VersionInfo{Version: "test"}, &stdout, &stderr)
 				output := stdout.String() + stderr.String()
-				if code == 0 || !strings.Contains(output, path) || !strings.Contains(output, tc.path) {
-					t.Fatalf("exit %d, expected file and field error: %s", code, output)
+				if code != 1 || !strings.Contains(output, path) || !strings.Contains(output, tc.path) || !strings.Contains(output, tc.message) {
+					t.Fatalf("exit %d, expected %s: %s containing %q: %s", code, path, tc.path, tc.message, output)
 				}
 			})
 		}
+	}
+}
+
+func TestMeasureSelectorsThroughCommands(t *testing.T) {
+	tests := []struct {
+		name, operation, selector string
+		want                      model.MeasureRef
+	}{
+		{name: "rows", operation: "count", selector: "kind: each_record", want: model.MeasureRef{Kind: "each_record"}},
+		{name: "subjects", operation: "countDistinctValue", selector: "subject_type_name: User", want: model.MeasureRef{SubjectTypeName: "User"}},
+		{name: "named", operation: "sum", selector: "measure_sync_id: value", want: model.MeasureRef{MeasureSyncID: "value"}},
+		{name: "external", operation: "countDistinctValue", selector: "subject_type_name: Customer\n        warehouse_metric_source_sync_tag: another-tag", want: model.MeasureRef{SubjectTypeName: "Customer", WarehouseMetricSourceSyncTag: "another-tag"}},
+	}
+	for _, command := range []string{"validate", "plan", "execute"} {
+		for _, test := range tests {
+			t.Run(command+"/"+test.name, func(t *testing.T) {
+				yamlPath := writeValidYAMLWithWarehouseConnection(t, "connection")
+				data, err := os.ReadFile(yamlPath)
+				if err != nil {
+					t.Fatal(err)
+				}
+				text := strings.NewReplacer("operation: sum", "operation: "+test.operation, "measure_sync_id: value", test.selector).Replace(string(data))
+				if err := os.WriteFile(yamlPath, []byte(text), 0o600); err != nil {
+					t.Fatal(err)
+				}
+				var received []model.SyncConfig
+				server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					if r.Method != http.MethodPost || r.URL.Path != "/api/unstable/ffe/metric-syncs" {
+						t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+						w.WriteHeader(http.StatusBadRequest)
+						return
+					}
+					var request model.SyncConfig
+					if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+						t.Error(err)
+					}
+					received = append(received, request)
+					writeOperation(t, w, "operation-id", "cobra-test", command, "queued")
+				}))
+				defer server.Close()
+				t.Setenv("DD_API_KEY", "")
+				t.Setenv("DD_APP_KEY", "")
+				args := []string{command, yamlPath, "--site", server.URL, "--log-file", filepath.Join(t.TempDir(), "metric-sync.log")}
+				if command != "validate" {
+					t.Setenv("DD_API_KEY", "test-api")
+					t.Setenv("DD_APP_KEY", "test-app")
+					args = append(args, "--no-poll")
+				}
+				var stdout, stderr bytes.Buffer
+				code := runWithIO(args, VersionInfo{Version: "test"}, &stdout, &stderr)
+				if code != 0 {
+					t.Fatalf("exit %d, stdout: %s stderr: %s", code, &stdout, &stderr)
+				}
+				if command == "validate" {
+					if len(received) != 0 {
+						t.Fatal("local validation called the API")
+					}
+					if !strings.Contains(stdout.String(), "local checks") || !strings.Contains(stdout.String(), "Run plan") {
+						t.Fatalf("missing local validation guidance: %s", &stdout)
+					}
+					return
+				}
+				if len(received) != 1 || len(received[0].Metrics) != 1 || received[0].Metrics[0].SimpleMetricAggregation == nil {
+					t.Fatalf("expected one submitted aggregation, got %v", received)
+				}
+				want := test.want
+				want.WarehouseMetricSourceSyncID = "source"
+				if got := received[0].Metrics[0].SimpleMetricAggregation; got.Measure != want || got.Operation != test.operation {
+					t.Fatalf("submitted aggregation %v, want operation %s and measure %v", got, test.operation, want)
+				}
+			})
+		}
+	}
+}
+
+func TestValidateCompleteMeasureExample(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	code := runWithIO([]string{"validate", "../../examples/minimal.yaml", "--log-file", filepath.Join(t.TempDir(), "metric-sync.log")}, VersionInfo{Version: "test"}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("exit %d, stdout: %s stderr: %s", code, &stdout, &stderr)
 	}
 }
