@@ -3,8 +3,11 @@ sync_tag: filtered-events
 warehouse_metric_sources:
   - sync_id: source
     name: Events
-    sql: SELECT * FROM events
+    sql: SELECT user_id, ts, value, country FROM events
     timestamp_column: ts
+    subject_types:
+      - name: User
+        column_name: user_id
     measures:
       - sync_id: value
         name: Revenue
