@@ -553,3 +553,33 @@ func TestValidateCompleteMeasureExample(t *testing.T) {
 		t.Fatalf("exit %d, stdout: %s stderr: %s", code, &stdout, &stderr)
 	}
 }
+
+func TestCommandsRejectTrailingDocumentsBeforeAPIRequest(t *testing.T) {
+	for _, suffix := range []string{"---\nmetrics: []\n", "---\n", "---\nmetrics: [\n", "...\ninvalid\n"} {
+		for _, command := range []string{"validate", "plan", "execute"} {
+			t.Run(command+"/"+suffix, func(t *testing.T) {
+				path := writeValidYAML(t)
+				data, err := os.ReadFile(path)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(path, append(data, []byte(suffix)...), 0600); err != nil {
+					t.Fatal(err)
+				}
+				server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					t.Error("rejected YAML must not call API")
+					w.WriteHeader(500)
+				}))
+				defer server.Close()
+				t.Setenv("DD_API_KEY", "api")
+				t.Setenv("DD_APP_KEY", "app")
+				var stdout, stderr bytes.Buffer
+				code := runWithIO([]string{command, path, "--site", server.URL, "--log-file", filepath.Join(t.TempDir(), "test.log")}, VersionInfo{Version: "test"}, &stdout, &stderr)
+				output := stdout.String() + stderr.String()
+				if code != 1 || !strings.Contains(output, path) || !strings.Contains(output, "YAML document") {
+					t.Fatalf("exit %d: %s", code, output)
+				}
+			})
+		}
+	}
+}

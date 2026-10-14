@@ -2,6 +2,10 @@
 
 Datadog Experiments Metric Sync CLI prepares metric sync definitions, submits them to Datadog's Metric Sync API, polls the async operation, and prints the results.
 
+Use one YAML document per file. To split definitions, use multiple files in the
+same directory with the same sync tag and options. Additional documents after a
+`---` separator are rejected before validation or submission.
+
 
 ## Installation
 
