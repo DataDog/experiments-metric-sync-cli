@@ -233,3 +233,37 @@ func TestInvalidFiltersDoNotCallAPI(t *testing.T) {
 		}
 	}
 }
+
+func TestInvalidMeasureFilterOperandsDoNotCallAPI(t *testing.T) {
+	prefix := filterYAML[:strings.Index(filterYAML, "      property_filters: &filters\n")]
+	for _, tc := range []struct{ name, columnType, operation, values, want string }{
+		{"nonnumeric measure", "STRING", "=", "[10]", "INTEGER or FLOAT"},
+		{"nonnumeric value", "FLOAT", ">=", "[abc]", "finite base-10"},
+		{"fractional integer", "INTEGER", "=", "[1.5]", "must be an integer"},
+		{"descending bounds", "FLOAT", "BETWEEN", "[10, 1]", "lower bound"},
+	} {
+		for _, command := range []string{"validate", "plan", "execute"} {
+			t.Run(command+"/"+tc.name, func(t *testing.T) {
+				input := strings.Replace(prefix, "column_type: FLOAT", "column_type: "+tc.columnType, 1) +
+					"      property_filters:\n        measure: *measure\n        operation: '" + tc.operation + "'\n        values: " + tc.values + "\n"
+				path := filepath.Join(t.TempDir(), "invalid.yaml")
+				if err := os.WriteFile(path, []byte(input), 0600); err != nil {
+					t.Fatal(err)
+				}
+				server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					t.Error("invalid measure filter called API")
+					w.WriteHeader(500)
+				}))
+				defer server.Close()
+				t.Setenv("DD_API_KEY", "api")
+				t.Setenv("DD_APP_KEY", "app")
+				var stdout, stderr bytes.Buffer
+				code := runWithIO([]string{command, path, "--site", server.URL, "--log-file", filepath.Join(t.TempDir(), "test.log")}, VersionInfo{Version: "test"}, &stdout, &stderr)
+				output := stdout.String() + stderr.String()
+				if code != 1 || !strings.Contains(output, path) || !strings.Contains(output, tc.want) {
+					t.Fatalf("exit %d, want %q and filename: %s", code, tc.want, output)
+				}
+			})
+		}
+	}
+}

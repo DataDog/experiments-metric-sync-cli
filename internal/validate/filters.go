@@ -6,8 +6,16 @@ package validate
 
 import (
 	"fmt"
+	"math"
+	"regexp"
+	"strconv"
 
 	"github.com/DataDog/experiments-metric-sync-cli/internal/model"
+)
+
+var (
+	integerFilterOperandPattern = regexp.MustCompile(`^[+-]?[0-9]+$`)
+	floatFilterOperandPattern   = regexp.MustCompile(`^[+-]?(?:(?:[0-9]+(?:\.[0-9]*)?)|(?:\.[0-9]+))(?:[eE][+-]?[0-9]+)?$`)
 )
 
 func validateFilters(add func(string, string), path string, groups model.PropertyFilters, aggregation model.MeasureRef, allowMeasure bool, syncTag string, sources map[string]model.WarehouseMetricSource) {
@@ -63,7 +71,7 @@ func validateFilters(add func(string, string), path string, groups model.Propert
 				if !allowMeasure {
 					add(p+".measure", "measure filters are not supported for percentile metrics")
 				}
-				validateMeasureRef(add, p+".measure", ref, syncTag, sources)
+				validMeasure := validateMeasureRef(add, p+".measure", ref, syncTag, sources)
 				if ref.MeasureSyncID == "" {
 					add(p+".measure.measure_sync_id", "must select a user-defined numeric measure")
 				}
@@ -81,10 +89,68 @@ func validateFilters(add func(string, string), path string, groups model.Propert
 				}
 				if count >= 0 && len(filter.Values) != count {
 					add(p+".values", fmt.Sprintf("must contain exactly %d values for %s", count, filter.Operation))
+				} else if count >= 0 && allowMeasure && validMeasure && ref.MeasureSyncID != "" {
+					validateMeasureFilterOperands(add, p, filter, syncTag, sources)
 				}
 			}
 		}
 	}
+}
+
+func validateMeasureFilterOperands(add func(string, string), path string, filter model.PropertyFilter, syncTag string, sources map[string]model.WarehouseMetricSource) {
+	ref := filter.Measure
+	source, local := sources[ref.WarehouseMetricSourceSyncID]
+	// The server resolves types for sources outside this payload.
+	if !local || (ref.WarehouseMetricSourceSyncTag != "" && ref.WarehouseMetricSourceSyncTag != syncTag) {
+		return
+	}
+	for _, measure := range source.Measures {
+		if measure.SyncID != ref.MeasureSyncID {
+			continue
+		}
+		if !oneOf(measure.ColumnType, "INTEGER", "FLOAT") {
+			add(path+".measure", "filter measure must have INTEGER or FLOAT column_type")
+		} else if err := validateNumericFilterValues(filter.Operation, filter.Values, measure.ColumnType); err != nil {
+			add(path+".values", err.Error())
+		}
+		return
+	}
+}
+
+// Match the backend's base-10 syntax, numeric limits, and BETWEEN ordering.
+// The caller checks the operation and value count before parsing operands.
+func validateNumericFilterValues(operation string, values []string, columnType string) error {
+	numericValues := make([]float64, len(values))
+	integerValues := make([]int64, len(values))
+	for i, value := range values {
+		if value == "" {
+			return fmt.Errorf("measure filter value %d must be a finite base-10 numeric literal", i)
+		}
+		if columnType == "INTEGER" {
+			if !integerFilterOperandPattern.MatchString(value) {
+				return fmt.Errorf("measure filter value %d must be an integer", i)
+			}
+			parsed, err := strconv.ParseInt(value, 10, 64)
+			if err != nil {
+				return fmt.Errorf("measure filter value %d must be a 64-bit integer", i)
+			}
+			integerValues[i] = parsed
+		} else if !floatFilterOperandPattern.MatchString(value) {
+			return fmt.Errorf("measure filter value %d must be a finite base-10 numeric literal", i)
+		}
+		parsed, err := strconv.ParseFloat(value, 64)
+		if err != nil || math.IsNaN(parsed) || math.IsInf(parsed, 0) {
+			return fmt.Errorf("measure filter value %d must be a finite base-10 numeric literal", i)
+		}
+		numericValues[i] = parsed
+	}
+	if operation == "BETWEEN" {
+		if (columnType == "INTEGER" && integerValues[0] > integerValues[1]) ||
+			(columnType == "FLOAT" && numericValues[0] > numericValues[1]) {
+			return fmt.Errorf("BETWEEN lower bound must be less than or equal to upper bound")
+		}
+	}
+	return nil
 }
 
 func validateFilterSource(add func(string, string), path, sourceID, tag string, aggregation model.MeasureRef, syncTag string) {
