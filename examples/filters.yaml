@@ -24,18 +24,16 @@ metrics:
       measure: &measure
         warehouse_metric_source_sync_id: source
         measure_sync_id: value
+      # A flat list is one AND group in the API request.
       property_filters: &filters
-        - - property: &property
-              warehouse_metric_source_sync_id: source
-              property_sync_id: country
-            operation: IS
-            values: [US, CA]
-          - property: *property
-            operation: IS_NOT
-            values: [FR]
-        - - property: *property
-            operation: IS
-            values: [GB]
+        - property: &property
+            warehouse_metric_source_sync_id: source
+            property_sync_id: country
+          operation: IS
+          values: [US, CA]
+        - property: *property
+          operation: IS_NOT
+          values: [FR]
   - sync_id: ratio
     name: Ratio
     metric_type: ratio
@@ -48,4 +46,21 @@ metrics:
     percentile_metric_aggregation:
       percentile: 0.95
       measure: *measure
-      property_filters: *filters
+      # A single filter also becomes one API group.
+      property_filters:
+        property: *property
+        operation: IS
+        values: [US, CA]
+  - sync_id: grouped
+    name: Grouped
+    metric_type: simple
+    simple_metric_aggregation:
+      operation: sum
+      measure: *measure
+      # Explicit groups use OR. Filters in each group use AND.
+      property_filters:
+        - *filters
+        -
+          - property: *property
+            operation: IS
+            values: [GB]

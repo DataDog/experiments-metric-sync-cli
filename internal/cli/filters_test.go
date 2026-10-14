@@ -71,10 +71,36 @@ metrics:
       property_filters: *filters
 `
 
+func withFilterBody(input, body string) string {
+	start := strings.Index(input, "      property_filters: &filters\n")
+	end := strings.Index(input[start:], "  - sync_id: ratio") + start
+	return input[:start] + "      property_filters: &filters\n" + body + input[end:]
+}
+
+const singleFilterBody = `        property: &property
+          warehouse_metric_source_sync_id: source
+          property_sync_id: country
+        operation: IS
+        values: [US, CA]
+`
+
+const flatFilterBody = `        - property: &property
+            warehouse_metric_source_sync_id: source
+            property_sync_id: country
+          operation: IS
+          values: [US, CA]
+        - property: *property
+          operator: IS_NOT
+          values: [FR]
+`
+
 func TestFilterRequestBody(t *testing.T) {
 	groupAliases := strings.Replace(filterYAML, "        - - property: &property", "        - &common_group\n          - property: &property", 1)
 	groupAliases = strings.Replace(groupAliases, "        - - property: *property", "        - &other_group\n          - property: *property", 1)
 	groupAliases = strings.Replace(groupAliases, "property_filters: *filters", "property_filters: [*common_group, *other_group]", 1)
+	filterAlias := withFilterBody(filterYAML, strings.Replace(flatFilterBody, "- property: &property", "- &condition\n          property: &property", 1))
+	filterAlias = strings.Replace(filterAlias, "property_filters: *filters", "property_filters: [*condition, {property: *property, operation: IS_NOT, values: [FR]}]", 1)
+
 	referenceIDs := strings.ReplaceAll(filterYAML, ": source", ": 001")
 	referenceIDs = strings.ReplaceAll(referenceIDs, "sync_id: country", "sync_id: 002")
 	scalarValues := strings.Replace(filterYAML, "name: Events", "name: &code 001", 1)
@@ -82,11 +108,17 @@ func TestFilterRequestBody(t *testing.T) {
 	for _, tc := range []struct {
 		name, input, sourceID, propertyID string
 		values                            []any
+		shape                             string
 	}{
-		{"standard", filterYAML, "source", "country", []any{"US", "CA"}},
-		{"reference text", referenceIDs, "001", "002", []any{"US", "CA"}},
-		{"scalar text", scalarValues, "source", "country", []any{"001", "1.00", "1e3", "2026-10-14", "True", "001"}},
-		{"group aliases", groupAliases, "source", "country", []any{"US", "CA"}},
+		{"filter alias in flat list", filterAlias, "source", "country", []any{"US", "CA"}, "flat"},
+		{"single filter", withFilterBody(filterYAML, singleFilterBody), "source", "country", []any{"US", "CA"}, "single"},
+		{"flat AND list", withFilterBody(filterYAML, flatFilterBody), "source", "country", []any{"US", "CA"}, "flat"},
+		{"single scalar text", withFilterBody(filterYAML, strings.Replace(singleFilterBody, "[US, CA]", "[001, 1.00, 1e3, 2026-10-14, True]", 1)), "source", "country", []any{"001", "1.00", "1e3", "2026-10-14", "True"}, "single"},
+		{"flat scalar text", withFilterBody(filterYAML, strings.Replace(flatFilterBody, "[US, CA]", "[001, 1.00, 1e3, 2026-10-14, True]", 1)), "source", "country", []any{"001", "1.00", "1e3", "2026-10-14", "True"}, "flat"},
+		{"standard", filterYAML, "source", "country", []any{"US", "CA"}, "nested"},
+		{"reference text", referenceIDs, "001", "002", []any{"US", "CA"}, "nested"},
+		{"scalar text", scalarValues, "source", "country", []any{"001", "1.00", "1e3", "2026-10-14", "True", "001"}, "nested"},
+		{"group aliases", groupAliases, "source", "country", []any{"US", "CA"}, "nested"},
 	} {
 		for _, command := range []string{"validate", "plan", "execute"} {
 			t.Run(tc.name+"/"+command, func(t *testing.T) {
@@ -133,6 +165,12 @@ func TestFilterRequestBody(t *testing.T) {
 					[]any{map[string]any{"property": ref, "operation": "IS", "values": tc.values}, map[string]any{"property": ref, "operation": "IS_NOT", "values": []any{"FR"}}},
 					[]any{map[string]any{"property": ref, "operation": "IS", "values": []any{"GB"}}},
 				}
+				if tc.shape != "nested" {
+					wantFilters = wantFilters[:1]
+					if tc.shape == "single" {
+						wantFilters[0] = wantFilters[0].([]any)[:1]
+					}
+				}
 				metrics := received["metrics"].([]any)
 				simple := metrics[0].(map[string]any)["simple_metric_aggregation"].(map[string]any)
 				ratio := metrics[1].(map[string]any)["ratio_metric_aggregation"].(map[string]any)
@@ -149,7 +187,14 @@ func TestFilterRequestBody(t *testing.T) {
 
 func TestInvalidFiltersDoNotCallAPI(t *testing.T) {
 	for _, tc := range []struct{ name, old, replacement, want string }{
-		{"flat list", "        - - property: &property", "        - property: &property", "parse"},
+		{"malformed indentation", "        - - property: &property", "        - property: &property", "parse"},
+		{"single unknown field", "property_filters: *filters", "property_filters: {property: *property, operation: IS, values: [US], typo: true}", "field typo not found"},
+		{"flat unknown field", "property_filters: *filters", "property_filters: [{property: *property, operation: IS, values: [US], typo: true}]", "field typo not found"},
+		{"flat conflicting aliases", "property_filters: *filters", "property_filters: [{property: *property, operation: IS, operator: IS, values: [US]}]", "not both"},
+		{"mixed filter and group", "property_filters: *filters", "property_filters: [{property: *property, operation: IS, values: [US]}, [{property: *property, operation: IS, values: [CA]}]]", "expected one filter"},
+		{"scalar filter", "property_filters: *filters", "property_filters: country", "expected one filter"},
+		{"single missing values", "property_filters: *filters", "property_filters: {property: *property, operation: IS, values: []}", "at least one value"},
+		{"flat missing property", "property_filters: *filters", "property_filters: [{property: {warehouse_metric_source_sync_id: source, property_sync_id: missing}, operation: IS, values: [US]}]", "does not match a property"},
 		{"old property name", "property_name: Country", "name: Country", "field name not found"},
 		{"old property column", "property_column: country", "column_name: country", "field column_name not found"},
 		{"old property type", "property_type: STRING", "column_type: STRING", "field column_type not found"},

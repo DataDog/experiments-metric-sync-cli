@@ -78,16 +78,45 @@ property field names are rejected. Measure fields remain `name`, `column_name`,
 and `column_type`. Use `property_sync_id` and `warehouse_metric_source_sync_id`
 to reference a property in a filter.
 
-`property_filters` is a list of groups. Conditions within a group use AND;
-groups use OR. Use `operation: IS` or `operation: IS_NOT` with a nonempty list
-of values. Simple and ratio metrics also support numeric measure filters and
-null checks when enabled by the API. Percentile metrics support property filters
-with `IS` and `IS_NOT` only. Filters must use the same source as the aggregation.
+`property_filters` accepts a single filter, a flat list of filters (AND), or
+nested groups (OR between groups, AND within each group). The CLI converts the
+single filter and flat list forms to one group in the API request.
+
+For one condition, no list markers are needed:
+
+```yaml
+property_filters:
+  property:
+    warehouse_metric_source_sync_id: source
+    property_sync_id: country
+  operation: IS
+  values: [US, CA]
+```
+
+For multiple AND conditions, use a flat list:
+
+```yaml
+property_filters:
+  - property:
+      warehouse_metric_source_sync_id: source
+      property_sync_id: country
+    operation: IS
+    values: [US, CA]
+  - property:
+      warehouse_metric_source_sync_id: source
+      property_sync_id: country
+    operation: IS_NOT
+    values: [CA]
+```
+
+Use explicit nested groups for OR. Do not mix filters and groups in one list.
+Use `operation: IS` or `operation: IS_NOT` with a nonempty list of values.
+Simple and ratio metrics also support numeric measure filters and null checks
+when enabled by the API. Percentile metrics support property filters with `IS`
+and `IS_NOT` only. Filters must use the same source as the aggregation.
 See [the filter example](examples/filters.yaml).
 
-The `operator` field remains an alias for `operation`. Flat filter lists are
-rejected: choose the intended AND/OR groups and add the nested list explicitly.
-The CLI does not infer grouping. These changes require a release newer than
+The `operator` field remains an alias for `operation`. These changes require a release newer than
 v0.1.1; they are available when building this branch from source.
 
 ## Idempotency
