@@ -101,9 +101,9 @@ func validateSource(add func(string, string), path string, source model.Warehous
 	for i, property := range source.Properties {
 		prefix := fmt.Sprintf("%s.properties[%d]", path, i)
 		requireSyncID(add, prefix+".sync_id", property.SyncID)
-		require(add, prefix+".name", property.Name)
-		require(add, prefix+".column_name", property.ColumnName)
-		require(add, prefix+".column_type", property.ColumnType)
+		require(add, prefix+".property_name", property.Name)
+		require(add, prefix+".property_column", property.ColumnName)
+		require(add, prefix+".property_type", property.ColumnType)
 	}
 }
 
@@ -278,6 +278,7 @@ func validateCombined(files []model.FileConfig) []Issue {
 
 func validateMetricRefs(add func(string, string), path string, metric model.Metric, syncTag string, sourcesByID map[string]model.WarehouseMetricSource) {
 	validateAgg := func(path string, agg model.SimpleMetricAggregation) {
+		validateFilters(add, path+".property_filters", agg.PropertyFilters, agg.Measure, true, syncTag, sourcesByID)
 		if validateMeasureRef(add, path+".measure", agg.Measure, syncTag, sourcesByID) {
 			validateOperationAgainstMeasure(add, path+".operation", agg.Operation, agg.Measure)
 		}
@@ -291,6 +292,7 @@ func validateMetricRefs(add func(string, string), path string, metric model.Metr
 	}
 	if metric.PercentileMetricAggregation != nil {
 		validateMeasureRef(add, path+".percentile_metric_aggregation.measure", metric.PercentileMetricAggregation.Measure, syncTag, sourcesByID)
+		validateFilters(add, path+".percentile_metric_aggregation.property_filters", metric.PercentileMetricAggregation.PropertyFilters, metric.PercentileMetricAggregation.Measure, false, syncTag, sourcesByID)
 	}
 }
 
