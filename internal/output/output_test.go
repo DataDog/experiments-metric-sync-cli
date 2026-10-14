@@ -6,6 +6,7 @@ package output
 
 import (
 	"bytes"
+	"encoding/json"
 	"regexp"
 	"strings"
 	"testing"
@@ -246,5 +247,42 @@ func assertNoANSI(t *testing.T, got string) {
 	t.Helper()
 	if ansiPattern.MatchString(got) {
 		t.Fatalf("expected no ANSI escapes, got %q", got)
+	}
+}
+
+func TestPrintResultDetailsAndFailureLabels(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+	id := "metric"
+	result := api.Result{MetricSyncID: "operation-id", Status: "failed", Updated: api.DiffBucket{Metrics: []api.DiffEntry{{SyncID: "metric", ID: "metric-id", Changes: map[string]api.FieldChange{"name": {Before: json.RawMessage(`"Old"`), After: json.RawMessage(`"New"`)}}}}}, Blocked: api.DiffBucket{WarehouseMetricSources: []api.DiffEntry{{SyncID: "events", ID: "source-id", Reason: "active experiment", AffectedExperimentIDs: []string{"experiment-id"}}}}, Warnings: []string{"server warning"}, Errors: []api.Issue{{ObjectType: "metric", SyncID: &id, Path: "metrics[0].measure", Message: "missing source", Remediation: "check the sync tag"}}}
+	var out bytes.Buffer
+	if err := PrintResult(&out, &result); err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"Proposed changes (completion is not confirmed)", "Update metric metric (ID: metric-id)", `name: "Old" -> "New"`, "Blocked source events", "Reason: active experiment", "Affected experiment: experiment-id", "Warning: server warning", "metrics[0].measure: missing source", "Correction: check the sync tag"} {
+		assertContains(t, out.String(), want)
+	}
+	if strings.Contains(out.String(), "already matches") {
+		t.Fatal(out.String())
+	}
+}
+
+func TestFailedEmptyResultDoesNotClaimSuccess(t *testing.T) {
+	var out bytes.Buffer
+	if err := PrintResult(&out, &api.Result{MetricSyncID: "failed-id", Status: "failed"}); err != nil {
+		t.Fatal(err)
+	}
+	assertContains(t, out.String(), "Operation failed-id failed. The server returned no error details.")
+	if strings.Contains(out.String(), "No changes") || strings.Contains(out.String(), "already matches") {
+		t.Fatal(out.String())
+	}
+}
+
+func TestPlanLabelsChangesAsProposed(t *testing.T) {
+	var out bytes.Buffer
+	if err := PrintResult(&out, &api.Result{Status: "planned", Plan: true, Upgraded: api.DiffBucket{Metrics: []api.DiffEntry{{SyncID: "revenue", ID: "retained-id"}}}}); err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"Proposed changes", "Manage with Metric Sync metric revenue (ID: retained-id)", "Keep the object ID and apply the YAML settings."} {
+		assertContains(t, out.String(), want)
 	}
 }
