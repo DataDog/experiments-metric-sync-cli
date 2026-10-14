@@ -267,3 +267,57 @@ func TestInvalidMeasureFilterOperandsDoNotCallAPI(t *testing.T) {
 		}
 	}
 }
+func TestNullFilterRequestBody(t *testing.T) {
+	input := filterYAML[:strings.Index(filterYAML, "  - sync_id: percentile")]
+	for _, operation := range []string{"IS_NULL", "IS_NOT_NULL"} {
+		for target, reference := range map[string]string{
+			"property": "property: {warehouse_metric_source_sync_id: source, property_sync_id: country}",
+			"measure":  "measure: {warehouse_metric_source_sync_id: source, measure_sync_id: value}",
+		} {
+			for valuesName, values := range map[string]string{"omitted": "", "null": ", values: null", "empty array": ", values: []"} {
+				condition := "{" + reference + ", operation: " + operation + values + "}"
+				for shape, body := range map[string]string{"single": condition, "flat": "[" + condition + "]", "nested": "[[" + condition + "]]"} {
+					for _, command := range []string{"plan", "execute"} {
+						t.Run(strings.Join([]string{operation, target, valuesName, shape, command}, "/"), func(t *testing.T) {
+							path := filepath.Join(t.TempDir(), "null-filters.yaml")
+							if err := os.WriteFile(path, []byte(withFilterBody(input, "        "+body+"\n")), 0600); err != nil {
+								t.Fatal(err)
+							}
+							var received map[string]any
+							server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+								if err := json.NewDecoder(r.Body).Decode(&received); err != nil {
+									t.Error(err)
+								}
+								writeOperation(t, w, "operation-id", "filters", command, "queued")
+							}))
+							defer server.Close()
+							t.Setenv("DD_API_KEY", "api")
+							t.Setenv("DD_APP_KEY", "app")
+							var stdout, stderr bytes.Buffer
+							args := []string{command, path, "--site", server.URL, "--no-poll", "--log-file", filepath.Join(t.TempDir(), "test.log")}
+							if code := runWithIO(args, VersionInfo{Version: "test"}, &stdout, &stderr); code != 0 {
+								t.Fatalf("exit %d: %s %s", code, &stdout, &stderr)
+							}
+							if received == nil {
+								t.Fatal("no request received")
+							}
+							metrics := received["metrics"].([]any)
+							simple := metrics[0].(map[string]any)["simple_metric_aggregation"].(map[string]any)
+							ratio := metrics[1].(map[string]any)["ratio_metric_aggregation"].(map[string]any)
+							for _, agg := range []map[string]any{simple, ratio["numerator_aggregation"].(map[string]any), ratio["denominator_aggregation"].(map[string]any)} {
+								filter := agg["property_filters"].([]any)[0].([]any)[0].(map[string]any)
+								values, ok := filter["values"].([]any)
+								if !ok || len(values) != 0 {
+									t.Errorf("values = %#v, want an empty JSON array", filter["values"])
+								}
+								if filter["operation"] != operation || filter[target] == nil {
+									t.Errorf("filter target or operation changed: %#v", filter)
+								}
+							}
+						})
+					}
+				}
+			}
+		}
+	}
+}

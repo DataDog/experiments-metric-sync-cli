@@ -83,6 +83,9 @@ func (f *PropertyFilters) UnmarshalYAML(unmarshal func(any) error) error {
 			result[i][j] = PropertyFilter{Property: filter.Property, Measure: filter.Measure, Values: filter.Values}
 			if operation != nil {
 				result[i][j].Operation = *operation
+				if filter.Values == nil && (*operation == "IS_NULL" || *operation == "IS_NOT_NULL") {
+					result[i][j].Values = []string{}
+				}
 			}
 		}
 	}
