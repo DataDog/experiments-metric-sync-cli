@@ -75,9 +75,9 @@ type Measure struct {
 
 type Property struct {
 	SyncID      string `json:"sync_id" yaml:"sync_id"`
-	Name        string `json:"name" yaml:"name"`
-	ColumnName  string `json:"column_name" yaml:"column_name"`
-	ColumnType  string `json:"column_type" yaml:"column_type"`
+	Name        string `json:"property_name" yaml:"name"`
+	ColumnName  string `json:"property_column" yaml:"column_name"`
+	ColumnType  string `json:"property_type" yaml:"column_type"`
 	Description string `json:"description,omitempty" yaml:"description,omitempty"`
 }
 
@@ -97,17 +97,17 @@ type Metric struct {
 }
 
 type SimpleMetricAggregation struct {
-	Operation             string           `json:"operation" yaml:"operation"`
-	Measure               MeasureRef       `json:"measure" yaml:"measure"`
-	TimeframeStartValue   *int             `json:"timeframe_start_value,omitempty" yaml:"timeframe_start_value,omitempty"`
-	TimeframeEndValue     *int             `json:"timeframe_end_value,omitempty" yaml:"timeframe_end_value,omitempty"`
-	TimeframeUnit         string           `json:"timeframe_unit,omitempty" yaml:"timeframe_unit,omitempty"`
-	PropertyFilters       []PropertyFilter `json:"property_filters,omitempty" yaml:"property_filters,omitempty"`
-	WinsorLowerPercentile *float64         `json:"winsor_lower_percentile,omitempty" yaml:"winsor_lower_percentile,omitempty"`
-	WinsorUpperPercentile *float64         `json:"winsor_upper_percentile,omitempty" yaml:"winsor_upper_percentile,omitempty"`
-	WinsorLowerFixedValue *float64         `json:"winsor_lower_fixed_value,omitempty" yaml:"winsor_lower_fixed_value,omitempty"`
-	WinsorUpperFixedValue *float64         `json:"winsor_upper_fixed_value,omitempty" yaml:"winsor_upper_fixed_value,omitempty"`
-	WinsorizationStrategy *string          `json:"winsorization_strategy,omitempty" yaml:"winsorization_strategy,omitempty"`
+	Operation             string          `json:"operation" yaml:"operation"`
+	Measure               MeasureRef      `json:"measure" yaml:"measure"`
+	TimeframeStartValue   *int            `json:"timeframe_start_value,omitempty" yaml:"timeframe_start_value,omitempty"`
+	TimeframeEndValue     *int            `json:"timeframe_end_value,omitempty" yaml:"timeframe_end_value,omitempty"`
+	TimeframeUnit         string          `json:"timeframe_unit,omitempty" yaml:"timeframe_unit,omitempty"`
+	PropertyFilters       PropertyFilters `json:"property_filters,omitempty" yaml:"property_filters,omitempty"`
+	WinsorLowerPercentile *float64        `json:"winsor_lower_percentile,omitempty" yaml:"winsor_lower_percentile,omitempty"`
+	WinsorUpperPercentile *float64        `json:"winsor_upper_percentile,omitempty" yaml:"winsor_upper_percentile,omitempty"`
+	WinsorLowerFixedValue *float64        `json:"winsor_lower_fixed_value,omitempty" yaml:"winsor_lower_fixed_value,omitempty"`
+	WinsorUpperFixedValue *float64        `json:"winsor_upper_fixed_value,omitempty" yaml:"winsor_upper_fixed_value,omitempty"`
+	WinsorizationStrategy *string         `json:"winsorization_strategy,omitempty" yaml:"winsorization_strategy,omitempty"`
 	// Threshold aggregation fields. Type, comparison operator, and breach value are
 	// required when operation is "threshold"; timeframe fields are optional as a pair.
 	ThresholdAggregationType    string   `json:"threshold_aggregation_type,omitempty" yaml:"threshold_aggregation_type,omitempty"`
@@ -123,12 +123,13 @@ type RatioMetricAggregation struct {
 }
 
 type PercentileMetricAggregation struct {
-	Operation           string     `json:"operation" yaml:"operation"`
-	Measure             MeasureRef `json:"measure" yaml:"measure"`
-	Percentile          float64    `json:"percentile" yaml:"percentile"`
-	TimeframeStartValue *int       `json:"timeframe_start_value,omitempty" yaml:"timeframe_start_value,omitempty"`
-	TimeframeEndValue   *int       `json:"timeframe_end_value,omitempty" yaml:"timeframe_end_value,omitempty"`
-	TimeframeUnit       string     `json:"timeframe_unit,omitempty" yaml:"timeframe_unit,omitempty"`
+	PropertyFilters     PropertyFilters `json:"property_filters,omitempty" yaml:"property_filters,omitempty"`
+	Operation           string          `json:"operation" yaml:"operation"`
+	Measure             MeasureRef      `json:"measure" yaml:"measure"`
+	Percentile          float64         `json:"percentile" yaml:"percentile"`
+	TimeframeStartValue *int            `json:"timeframe_start_value,omitempty" yaml:"timeframe_start_value,omitempty"`
+	TimeframeEndValue   *int            `json:"timeframe_end_value,omitempty" yaml:"timeframe_end_value,omitempty"`
+	TimeframeUnit       string          `json:"timeframe_unit,omitempty" yaml:"timeframe_unit,omitempty"`
 }
 
 type MeasureRef struct {
@@ -141,9 +142,10 @@ type MeasureRef struct {
 }
 
 type PropertyFilter struct {
-	Property PropertyRef `json:"property" yaml:"property"`
-	Operator string      `json:"operator" yaml:"operator"`
-	Values   []string    `json:"values" yaml:"values"`
+	Property  *PropertyRef `json:"property,omitempty" yaml:"property,omitempty"`
+	Measure   *MeasureRef  `json:"measure,omitempty" yaml:"measure,omitempty"`
+	Operation string       `json:"operation" yaml:"operation"`
+	Values    []string     `json:"values" yaml:"values"`
 }
 
 type PropertyRef struct {

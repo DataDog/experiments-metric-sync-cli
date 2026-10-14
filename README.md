@@ -69,6 +69,25 @@ For YAML fields and measure references, see
 [Sync Experiment Metrics from YAML](https://docs.datadoghq.com/experiments/defining_metrics/metric_sync/#yaml-reference).
 See [examples](examples/) for complete YAML files.
 
+### Properties and filters
+
+Source properties use `name`, `column_name`, and `column_type` in YAML. The CLI
+sends these as `property_name`, `property_column`, and `property_type` in API
+requests. Use `property_sync_id` and `warehouse_metric_source_sync_id` to reference
+a property in a filter.
+
+`property_filters` is a list of groups. Conditions within a group use AND;
+groups use OR. Use `operation: IS` or `operation: IS_NOT` with a nonempty list
+of values. Simple and ratio metrics also support numeric measure filters and
+null checks when enabled by the API. Percentile metrics support property filters
+with `IS` and `IS_NOT` only. Filters must use the same source as the aggregation.
+See [the filter example](examples/filters.yaml).
+
+The `operator` field remains an alias for `operation`. Flat filter lists are
+rejected: choose the intended AND/OR groups and add the nested list explicitly.
+The CLI does not infer grouping. These changes require a release newer than
+v0.1.1; they are available when building this branch from source.
+
 ## Idempotency
 
 The CLI sends an `Idempotency-Key` for `plan` and `execute` requests. In CI, the

@@ -1,0 +1,51 @@
+schema_version: 1
+sync_tag: filtered-events
+warehouse_metric_sources:
+  - sync_id: source
+    name: Events
+    sql: SELECT * FROM events
+    timestamp_column: ts
+    measures:
+      - sync_id: value
+        name: Revenue
+        column_name: value
+        column_type: FLOAT
+    properties:
+      - sync_id: country
+        name: Country
+        column_name: country
+        column_type: STRING
+metrics:
+  - sync_id: simple
+    name: Simple
+    metric_type: simple
+    simple_metric_aggregation: &aggregation
+      operation: sum
+      measure: &measure
+        warehouse_metric_source_sync_id: source
+        measure_sync_id: value
+      property_filters: &filters
+        - - property: &property
+              warehouse_metric_source_sync_id: source
+              property_sync_id: country
+            operation: IS
+            values: [US, CA]
+          - property: *property
+            operation: IS_NOT
+            values: [FR]
+        - - property: *property
+            operation: IS
+            values: [GB]
+  - sync_id: ratio
+    name: Ratio
+    metric_type: ratio
+    ratio_metric_aggregation:
+      numerator_aggregation: *aggregation
+      denominator_aggregation: *aggregation
+  - sync_id: percentile
+    name: Percentile
+    metric_type: percentile
+    percentile_metric_aggregation:
+      percentile: 0.95
+      measure: *measure
+      property_filters: *filters
