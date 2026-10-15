@@ -1,0 +1,69 @@
+schema_version: 1
+sync_tag: filtered-events
+warehouse_metric_sources:
+  - sync_id: source
+    name: Events
+    sql: SELECT user_id, ts, value, country FROM events
+    timestamp_column: ts
+    subject_types:
+      - name: User
+        column_name: user_id
+    measures:
+      - sync_id: value
+        name: Revenue
+        column_name: value
+        column_type: FLOAT
+    properties:
+      - sync_id: country
+        property_name: Country
+        property_column: country
+        property_type: STRING
+metrics:
+  - sync_id: simple
+    name: Simple
+    metric_type: simple
+    simple_metric_aggregation: &aggregation
+      operation: sum
+      measure: &measure
+        warehouse_metric_source_sync_id: source
+        measure_sync_id: value
+      # A flat list is one AND group in the API request.
+      property_filters: &filters
+        - property: &property
+            warehouse_metric_source_sync_id: source
+            property_sync_id: country
+          operation: IS
+          values: [US, CA]
+        - property: *property
+          operation: IS_NOT
+          values: [FR]
+  - sync_id: ratio
+    name: Ratio
+    metric_type: ratio
+    ratio_metric_aggregation:
+      numerator_aggregation: *aggregation
+      denominator_aggregation: *aggregation
+  - sync_id: percentile
+    name: Percentile
+    metric_type: percentile
+    percentile_metric_aggregation:
+      percentile: 0.95
+      measure: *measure
+      # A single filter also becomes one API group.
+      property_filters:
+        property: *property
+        operation: IS
+        values: [US, CA]
+  - sync_id: grouped
+    name: Grouped
+    metric_type: simple
+    simple_metric_aggregation:
+      operation: sum
+      measure: *measure
+      # Explicit groups use OR. Filters in each group use AND.
+      property_filters:
+        - *filters
+        -
+          - property: *property
+            operation: IS
+            values: [GB]

@@ -7,6 +7,7 @@ package yamlutil
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -114,6 +115,7 @@ metrics:
     ratio_metric_aggregation:
       numerator_aggregation:
         operation: threshold
+        winsorization_strategy: all_assigned_subjects
         threshold_aggregation_type: sum
         threshold_comparison_operator: gte
         threshold_breach_value: 10
@@ -122,6 +124,7 @@ metrics:
           measure_sync_id: m
       denominator_aggregation:
         operation: count
+        winsorization_strategy: nonzero
         measure:
           warehouse_metric_source_sync_id: src
           measure_sync_id: m
@@ -134,6 +137,9 @@ metrics:
 	ratio := config.Metrics[0].RatioMetricAggregation
 	if ratio == nil {
 		t.Fatal("expected ratio_metric_aggregation")
+	}
+	if ratio.NumeratorAggregation.WinsorizationStrategy == nil || *ratio.NumeratorAggregation.WinsorizationStrategy != "all_assigned_subjects" || ratio.DenominatorAggregation.WinsorizationStrategy == nil || *ratio.DenominatorAggregation.WinsorizationStrategy != "nonzero" {
+		t.Fatalf("unexpected ratio strategies: %#v", ratio)
 	}
 	if ratio.NumeratorAggregation.Operation != "threshold" {
 		t.Fatalf("numerator operation = %q, want threshold", ratio.NumeratorAggregation.Operation)
@@ -150,4 +156,38 @@ func writeYAML(t *testing.T, body string) string {
 		t.Fatal(err)
 	}
 	return path
+}
+
+func TestLoadFileDocumentBoundaries(t *testing.T) {
+	for _, tc := range []struct{ name, body, want string }{
+		{"leading marker", "---\nschema_version: 1\nsync_tag: test\n", ""},
+		{"trailing comments", "schema_version: 1\nsync_tag: test\n# comment\n  \n", ""},
+		{"end marker", "schema_version: 1\nsync_tag: test\n...\n# comment\n", ""},
+		{"second document", "schema_version: 1\nsync_tag: test\n---\nmetrics: []\n", "only one YAML document"},
+		{"empty second document", "schema_version: 1\nsync_tag: test\n---\n", "only one YAML document"},
+		{"comment second document", "schema_version: 1\nsync_tag: test\n---\n# comment\n", "only one YAML document"},
+		{"malformed second document", "schema_version: 1\nsync_tag: test\n---\nmetrics: [\n", "after the first YAML document"},
+		{"malformed trailing content", "schema_version: 1\nsync_tag: test\n...\ninvalid\n", "after the first YAML document"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			path := writeYAML(t, tc.body)
+			_, err := LoadFile(path)
+			if tc.want == "" {
+				if err != nil {
+					t.Fatal(err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), path) || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("expected filename and %q, got %v", tc.want, err)
+			}
+		})
+	}
+}
+
+func TestLoadFilesKeepsSeparateDocuments(t *testing.T) {
+	files, err := LoadFiles([]string{writeYAML(t, "schema_version: 1\nsync_tag: test\n"), writeYAML(t, "---\nschema_version: 1\nsync_tag: test\n")})
+	if err != nil || len(files) != 2 {
+		t.Fatalf("files=%v, error=%v", files, err)
+	}
 }

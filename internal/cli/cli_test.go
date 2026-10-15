@@ -11,6 +11,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -191,46 +192,77 @@ func TestPlanFetchesWarehouseConnectionWhenYAMLOmitsIt(t *testing.T) {
 	}
 }
 
-func TestPlanUsesExplicitWarehouseConnectionWithoutLookup(t *testing.T) {
-	yamlPath := writeValidYAMLWithWarehouseConnection(t, "explicit-connection")
-	logPath := filepath.Join(t.TempDir(), "metric-sync.log")
-	var sawSubmit bool
-
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodGet && r.URL.Path == "/api/unstable/ffe/warehouse-connections" {
-			t.Fatal("did not expect warehouse connection lookup")
+func TestSubmitUsesExplicitWarehouseConnectionWithoutLookup(t *testing.T) {
+	for _, command := range []string{"plan", "execute"} {
+		for _, omitted := range []bool{false, true} {
+			name := "explicit"
+			if omitted {
+				name = "omitted"
+			}
+			t.Run(command+"/"+name, func(t *testing.T) {
+				yamlPath := writeValidYAMLWithWarehouseConnection(t, "explicit-connection")
+				if omitted {
+					data, err := os.ReadFile(yamlPath)
+					if err != nil {
+						t.Fatal(err)
+					}
+					content := strings.ReplaceAll(string(data), "    additional_timestamp_columns:\n      - TRANSACTION_TIMESTAMP\n", "")
+					content = strings.ReplaceAll(content, "      winsorization_strategy: nonzero\n", "")
+					if err := os.WriteFile(yamlPath, []byte(content), 0o600); err != nil {
+						t.Fatal(err)
+					}
+				}
+				var received map[string]any
+				server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					if r.Method != http.MethodPost || r.URL.Path != "/api/v2/experiments/metric-syncs" {
+						t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+						w.WriteHeader(http.StatusBadRequest)
+						return
+					}
+					if got := r.URL.Query().Get("plan"); (got == "true") != (command == "plan") {
+						t.Errorf("unexpected plan query: %q", got)
+					}
+					if err := json.NewDecoder(r.Body).Decode(&received); err != nil {
+						t.Error(err)
+					}
+					writeOperation(t, w, "operation-id", "cobra-test", command, "queued")
+				}))
+				defer server.Close()
+				t.Setenv("DD_API_KEY", "api")
+				t.Setenv("DD_APP_KEY", "app")
+				var stdout, stderr bytes.Buffer
+				code := runWithIO([]string{command, yamlPath, "--site", server.URL, "--no-poll", "--log-file", filepath.Join(t.TempDir(), "metric-sync.log")}, VersionInfo{Version: "test"}, &stdout, &stderr)
+				if code != 0 {
+					t.Fatalf("exit %d, stdout: %s stderr: %s", code, &stdout, &stderr)
+				}
+				if received == nil {
+					t.Fatal("expected submit")
+				}
+				if received["warehouse_connection_id"] != "explicit-connection" {
+					t.Fatalf("unexpected warehouse connection: %v", received)
+				}
+				source := received["warehouse_metric_sources"].([]any)[0].(map[string]any)
+				agg := received["metrics"].([]any)[0].(map[string]any)["simple_metric_aggregation"].(map[string]any)
+				if omitted {
+					if _, ok := source["additional_timestamp_columns"]; ok {
+						t.Fatal("expected omitted timestamps")
+					}
+					if _, ok := agg["winsorization_strategy"]; ok {
+						t.Fatal("expected omitted strategy")
+					}
+				} else {
+					if !reflect.DeepEqual(source["additional_timestamp_columns"], []any{"TRANSACTION_TIMESTAMP"}) {
+						t.Fatalf("unexpected timestamps: %v", source)
+					}
+					if agg["winsorization_strategy"] != "nonzero" {
+						t.Fatalf("unexpected strategy: %v", agg)
+					}
+				}
+				if agg["winsor_upper_percentile"] != 0.99 {
+					t.Fatalf("unexpected upper percentile: %v", agg)
+				}
+			})
 		}
-		if r.Method != http.MethodPost || r.URL.Path != "/api/v2/experiments/metric-syncs" {
-			t.Fatalf("unexpected request %s %s", r.Method, r.URL.Path)
-		}
-		sawSubmit = true
-		var request model.SyncConfig
-		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-			t.Fatal(err)
-		}
-		if request.WarehouseConnectionID != "explicit-connection" {
-			t.Fatalf("got warehouse connection %q", request.WarehouseConnectionID)
-		}
-		writeOperation(t, w, "operation-id", "cobra-test", "plan", "queued")
-	}))
-	defer server.Close()
-	t.Setenv("DD_API_KEY", "api")
-	t.Setenv("DD_APP_KEY", "app")
-
-	var stdout, stderr bytes.Buffer
-	code := runWithIO([]string{
-		"plan",
-		yamlPath,
-		"--site", server.URL,
-		"--no-poll",
-		"--log-file", logPath,
-	}, VersionInfo{Version: "test"}, &stdout, &stderr)
-
-	if code != 0 {
-		t.Fatalf("got exit code %d, stdout: %s stderr: %s", code, stdout.String(), stderr.String())
-	}
-	if !sawSubmit {
-		t.Fatal("expected submit")
 	}
 }
 
@@ -330,8 +362,10 @@ sync_tag: cobra-test
 warehouse_metric_sources:
   - sync_id: source
     name: Source
-    sql: SELECT USER_ID, EVENT_TIMESTAMP, VALUE FROM table
+    sql: SELECT USER_ID, EVENT_TIMESTAMP, TRANSACTION_TIMESTAMP, VALUE FROM table
     timestamp_column: EVENT_TIMESTAMP
+    additional_timestamp_columns:
+      - TRANSACTION_TIMESTAMP
     subject_types:
       - name: User
         column_name: USER_ID
@@ -350,6 +384,8 @@ metrics:
         warehouse_metric_source_sync_id: source
         measure_sync_id: value
       timeframe_start_value: 0
+      winsor_upper_percentile: 0.99
+      winsorization_strategy: nonzero
 `)
 	if err := os.WriteFile(path, data, 0o600); err != nil {
 		t.Fatal(err)
@@ -400,6 +436,154 @@ func writeOperation(t *testing.T, w http.ResponseWriter, id string, syncTag stri
 	}
 }
 
+func TestCommandsRejectInvalidFieldsBeforeAPIRequest(t *testing.T) {
+	example, err := os.ReadFile(writeValidYAML(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct{ name, old, replacement, path, message string }{
+		{"strategy", "winsorization_strategy: nonzero", `winsorization_strategy: ""`, "metrics[0].simple_metric_aggregation.winsorization_strategy", "must be all_assigned_subjects or nonzero"},
+		{"duplicate timestamp", "      - TRANSACTION_TIMESTAMP", "      - TRANSACTION_TIMESTAMP\n      - TRANSACTION_TIMESTAMP", "warehouse_metric_sources[0].additional_timestamp_columns[1]", "must be unique"},
+		{"too many timestamps", "      - TRANSACTION_TIMESTAMP", "      - a\n      - b\n      - c\n      - d\n      - e", "warehouse_metric_sources[0].additional_timestamp_columns", "must contain at most 4"},
+		{"raw measure ID", "measure_sync_id: value", "warehouse_metric_measure_id: raw-id", "metrics[0].simple_metric_aggregation.measure.warehouse_metric_measure_id", "not supported by the sync API"},
+		{"wrong measure operation", "measure_sync_id: value", "kind: each_record", "metrics[0].simple_metric_aggregation.operation", "sum requires a user-defined measure"},
+		{"unknown subject", "measure_sync_id: value", "subject_type_name: Missing", "metrics[0].simple_metric_aggregation.measure.subject_type_name", "does not match subject_types[].name"},
+	} {
+		for _, command := range []string{"validate", "plan", "execute"} {
+			t.Run(command+"/"+tc.name, func(t *testing.T) {
+				path := filepath.Join(t.TempDir(), "invalid.yaml")
+				content := strings.Replace(string(example), tc.old, tc.replacement, 1)
+				if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+					t.Fatal(err)
+				}
+				server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					t.Error("invalid fields must fail before any API request")
+					w.WriteHeader(http.StatusInternalServerError)
+				}))
+				defer server.Close()
+				t.Setenv("DD_API_KEY", "test-api")
+				t.Setenv("DD_APP_KEY", "test-app")
+				var stdout, stderr bytes.Buffer
+				code := runWithIO([]string{command, path, "--site", server.URL, "--log-file", filepath.Join(t.TempDir(), "test.log")}, VersionInfo{Version: "test"}, &stdout, &stderr)
+				output := stdout.String() + stderr.String()
+				if code != 1 || !strings.Contains(output, path) || !strings.Contains(output, tc.path) || !strings.Contains(output, tc.message) {
+					t.Fatalf("exit %d, expected %s: %s containing %q: %s", code, path, tc.path, tc.message, output)
+				}
+			})
+		}
+	}
+}
+
+func TestMeasureSelectorsThroughCommands(t *testing.T) {
+	tests := []struct {
+		name, operation, selector string
+		want                      model.MeasureRef
+	}{
+		{name: "rows", operation: "count", selector: "kind: each_record", want: model.MeasureRef{Kind: "each_record"}},
+		{name: "subjects", operation: "countDistinctValue", selector: "subject_type_name: User", want: model.MeasureRef{SubjectTypeName: "User"}},
+		{name: "named", operation: "sum", selector: "measure_sync_id: value", want: model.MeasureRef{MeasureSyncID: "value"}},
+		{name: "external", operation: "countDistinctValue", selector: "subject_type_name: Customer\n        warehouse_metric_source_sync_tag: another-tag", want: model.MeasureRef{SubjectTypeName: "Customer", WarehouseMetricSourceSyncTag: "another-tag"}},
+	}
+	for _, command := range []string{"validate", "plan", "execute"} {
+		for _, test := range tests {
+			t.Run(command+"/"+test.name, func(t *testing.T) {
+				yamlPath := writeValidYAMLWithWarehouseConnection(t, "connection")
+				data, err := os.ReadFile(yamlPath)
+				if err != nil {
+					t.Fatal(err)
+				}
+				text := strings.NewReplacer("operation: sum", "operation: "+test.operation, "measure_sync_id: value", test.selector).Replace(string(data))
+				if err := os.WriteFile(yamlPath, []byte(text), 0o600); err != nil {
+					t.Fatal(err)
+				}
+				var received []model.SyncConfig
+				server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					if r.Method != http.MethodPost || r.URL.Path != "/api/v2/experiments/metric-syncs" {
+						t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+						w.WriteHeader(http.StatusBadRequest)
+						return
+					}
+					var request model.SyncConfig
+					if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+						t.Error(err)
+					}
+					received = append(received, request)
+					writeOperation(t, w, "operation-id", "cobra-test", command, "queued")
+				}))
+				defer server.Close()
+				t.Setenv("DD_API_KEY", "")
+				t.Setenv("DD_APP_KEY", "")
+				args := []string{command, yamlPath, "--site", server.URL, "--log-file", filepath.Join(t.TempDir(), "metric-sync.log")}
+				if command != "validate" {
+					t.Setenv("DD_API_KEY", "test-api")
+					t.Setenv("DD_APP_KEY", "test-app")
+					args = append(args, "--no-poll")
+				}
+				var stdout, stderr bytes.Buffer
+				code := runWithIO(args, VersionInfo{Version: "test"}, &stdout, &stderr)
+				if code != 0 {
+					t.Fatalf("exit %d, stdout: %s stderr: %s", code, &stdout, &stderr)
+				}
+				if command == "validate" {
+					if len(received) != 0 {
+						t.Fatal("local validation called the API")
+					}
+					if !strings.Contains(stdout.String(), "local checks") || !strings.Contains(stdout.String(), "Run plan") {
+						t.Fatalf("missing local validation guidance: %s", &stdout)
+					}
+					return
+				}
+				if len(received) != 1 || len(received[0].Metrics) != 1 || received[0].Metrics[0].SimpleMetricAggregation == nil {
+					t.Fatalf("expected one submitted aggregation, got %v", received)
+				}
+				want := test.want
+				want.WarehouseMetricSourceSyncID = "source"
+				if got := received[0].Metrics[0].SimpleMetricAggregation; got.Measure != want || got.Operation != test.operation {
+					t.Fatalf("submitted aggregation %v, want operation %s and measure %v", got, test.operation, want)
+				}
+			})
+		}
+	}
+}
+
+func TestValidateCompleteMeasureExample(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	code := runWithIO([]string{"validate", "../../examples/minimal.yaml", "--log-file", filepath.Join(t.TempDir(), "metric-sync.log")}, VersionInfo{Version: "test"}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("exit %d, stdout: %s stderr: %s", code, &stdout, &stderr)
+	}
+}
+
+func TestCommandsRejectTrailingDocumentsBeforeAPIRequest(t *testing.T) {
+	for _, suffix := range []string{"---\nmetrics: []\n", "---\n", "---\nmetrics: [\n", "...\ninvalid\n"} {
+		for _, command := range []string{"validate", "plan", "execute"} {
+			t.Run(command+"/"+suffix, func(t *testing.T) {
+				path := writeValidYAML(t)
+				data, err := os.ReadFile(path)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(path, append(data, []byte(suffix)...), 0600); err != nil {
+					t.Fatal(err)
+				}
+				server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					t.Error("rejected YAML must not call API")
+					w.WriteHeader(500)
+				}))
+				defer server.Close()
+				t.Setenv("DD_API_KEY", "api")
+				t.Setenv("DD_APP_KEY", "app")
+				var stdout, stderr bytes.Buffer
+				code := runWithIO([]string{command, path, "--site", server.URL, "--log-file", filepath.Join(t.TempDir(), "test.log")}, VersionInfo{Version: "test"}, &stdout, &stderr)
+				output := stdout.String() + stderr.String()
+				if code != 1 || !strings.Contains(output, path) || !strings.Contains(output, "YAML document") {
+					t.Fatalf("exit %d: %s", code, output)
+				}
+			})
+		}
+	}
+}
+
 func TestPublicV2SubmitLifecycle(t *testing.T) {
 	outcomes := []struct {
 		name         string
@@ -408,12 +592,12 @@ func TestPublicV2SubmitLifecycle(t *testing.T) {
 		requestCount int
 	}{
 		{"success", 0, 0, 4},
-		{"failed", 1, 1, 3},
+		{"failed", 1, 1, 4},
 		{"no-poll", 0, 0, 1},
 		{"submit-error", 1, 1, 1},
 		{"status-error", 1, 1, 2},
 		{"result-error", 1, 1, 4},
-		{"blocked", 0, 1, 4},
+		{"blocked", 1, 1, 4},
 	}
 	for _, operation := range []string{"plan", "execute"} {
 		for _, outcome := range outcomes {

@@ -2,6 +2,10 @@
 
 Datadog Experiments Metric Sync CLI prepares metric sync definitions, submits them to Datadog's public Experiments v2 Metric Sync API, polls the async operation, and prints the results.
 
+Use one YAML document per file. To split definitions, use multiple files in the
+same directory with the same sync tag and options. Additional documents after a
+`---` separator are rejected before validation or submission.
+
 
 ## Installation
 
@@ -50,7 +54,13 @@ metric-sync execute ./metrics
 `execute` discovers metric sync YAML files, validates them locally, submits a
 write operation to the Metric Sync API, polls until the operation reaches a
 terminal state, and prints the created, updated, deleted, upgraded, blocked, and
-error counts.
+error counts. It also shows object IDs, setting changes, blocked reasons, server
+warnings, and available errors. Plans show proposed changes. A failed result does
+not confirm that its proposed changes were applied.
+
+A blocked plan or execute result exits nonzero, as does a failed operation. The
+`result` command uses the same exit behavior. With `--no-poll`, exit zero confirms
+only submission; use `status` and `result` to check completion.
 
 Other commands:
 
@@ -64,6 +74,60 @@ metric-sync version
 `validate` only performs local validation and does not call Datadog. `status`
 checks an operation by ID. `result` fetches the terminal plan or execute result.
 `version` prints build metadata.
+
+For YAML fields and measure references, see
+[Sync Experiment Metrics from YAML](https://docs.datadoghq.com/experiments/defining_metrics/metric_sync/#yaml-reference).
+See [examples](examples/) for complete YAML files.
+
+### Properties and filters
+
+Source properties use `property_name`, `property_column`, and `property_type`
+in both YAML and API requests. Rename the previous YAML fields `name`,
+`column_name`, and `column_type` on properties to these API names. The old
+property field names are rejected. Measure fields remain `name`, `column_name`,
+and `column_type`. Use `property_sync_id` and `warehouse_metric_source_sync_id`
+to reference a property in a filter.
+
+`property_filters` accepts a single filter, a flat list of filters (AND), or
+nested groups (OR between groups, AND within each group). The CLI converts the
+single filter and flat list forms to one group in the API request.
+
+For one condition, no list markers are needed:
+
+```yaml
+property_filters:
+  property:
+    warehouse_metric_source_sync_id: source
+    property_sync_id: country
+  operation: IS
+  values: [US, CA]
+```
+
+For multiple AND conditions, use a flat list:
+
+```yaml
+property_filters:
+  - property:
+      warehouse_metric_source_sync_id: source
+      property_sync_id: country
+    operation: IS
+    values: [US, CA]
+  - property:
+      warehouse_metric_source_sync_id: source
+      property_sync_id: country
+    operation: IS_NOT
+    values: [CA]
+```
+
+Use explicit nested groups for OR. Do not mix filters and groups in one list.
+Use `operation: IS` or `operation: IS_NOT` with a nonempty list of values.
+Simple and ratio metrics also support numeric measure filters and null checks
+when enabled by the API. Percentile metrics support property filters with `IS`
+and `IS_NOT` only. Filters must use the same source as the aggregation.
+See [the filter example](examples/filters.yaml).
+
+The `operator` field remains an alias for `operation`. These changes require a release newer than
+v0.1.1; they are available when building this branch from source.
 
 ## Idempotency
 

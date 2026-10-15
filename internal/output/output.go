@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"sort"
 	"strconv"
 	"time"
 
@@ -31,7 +32,8 @@ func PrintDiscovered(w io.Writer, files []string) error {
 func PrintValidation(w io.Writer, issues []validate.Issue) error {
 	if len(issues) == 0 {
 		return renderRows(w, "Validation", 10, []row{
-			{label: "Status", value: colorGreen("passed")},
+			{label: "Status", value: colorGreen("passed (local checks)")},
+			{label: "Next step", value: "Run plan to preview changes. External references are resolved during execute."},
 		})
 	}
 	if err := renderRows(w, "Validation", 10, []row{
@@ -53,7 +55,14 @@ func PrintValidation(w io.Writer, issues []validate.Issue) error {
 }
 
 func PrintOperation(w io.Writer, operation *api.Operation) error {
-	return renderMetricSync(w, operation.MetricSyncID, displayOperation(operation.OperationType), operation.Status, operation.SyncTag)
+	if err := renderMetricSync(w, operation.MetricSyncID, displayOperation(operation.OperationType), operation.Status, operation.SyncTag); err != nil {
+		return err
+	}
+	if operation.StatusDetail != nil {
+		_, err := fmt.Fprintf(w, "Status detail: %s\n", *operation.StatusDetail)
+		return err
+	}
+	return nil
 }
 
 func PrintSubmittedOperation(w io.Writer, operation *api.Operation, idempotencyKey string) error {
@@ -63,6 +72,7 @@ func PrintSubmittedOperation(w io.Writer, operation *api.Operation, idempotencyK
 		{label: "Status", value: colorStatus(operation.Status)},
 		{label: "Sync tag", value: operation.SyncTag},
 		{label: "Idempotency key", value: idempotencyKey},
+		{label: "Completion", value: "Submission accepted; completion is not confirmed."},
 	})
 }
 
@@ -71,7 +81,13 @@ func PrintResult(w io.Writer, result *api.Result) error {
 	if err := renderMetricSync(w, result.MetricSyncID, operationName(result), result.Status, result.SyncTag); err != nil {
 		return err
 	}
-	if err := renderRows(w, "Summary", 10, []row{
+	summaryTitle := "Summary"
+	if result.Plan {
+		summaryTitle = "Proposed changes"
+	} else if result.Status != "success" && result.Status != "skipped" {
+		summaryTitle = "Proposed changes (completion is not confirmed)"
+	}
+	if err := renderRows(w, summaryTitle, 10, []row{
 		{label: "Created", value: strconv.Itoa(summary.counts.created)},
 		{label: "Updated", value: strconv.Itoa(summary.counts.updated)},
 		{label: "Deleted", value: strconv.Itoa(summary.counts.deleted)},
@@ -81,7 +97,10 @@ func PrintResult(w io.Writer, result *api.Result) error {
 	}); err != nil {
 		return err
 	}
-	if !summary.hasChanges() {
+	if err := printResultDetails(w, result); err != nil {
+		return err
+	}
+	if !summary.hasChanges() && (result.Status == "success" || result.Status == "planned" || result.Status == "skipped") {
 		return renderRows(w, "No changes", 10, []row{
 			{label: "Result", value: "Datadog already matches the submitted metric definitions."},
 		})
@@ -280,4 +299,81 @@ func displayOperation(operation string) string {
 		return "execute"
 	}
 	return operation
+}
+
+func printResultDetails(w io.Writer, result *api.Result) error {
+	for _, action := range []struct {
+		name   string
+		bucket api.DiffBucket
+	}{
+		{"Create", result.Created}, {"Update", result.Updated}, {"Delete", result.Deleted}, {"Manage with Metric Sync", result.Upgraded}, {"Blocked", result.Blocked},
+	} {
+		for _, objects := range []struct {
+			name    string
+			entries []api.DiffEntry
+		}{{"source", action.bucket.WarehouseMetricSources}, {"metric", action.bucket.Metrics}} {
+			for _, entry := range objects.entries {
+				if _, err := fmt.Fprintf(w, "  %s %s %s (ID: %s)\n", action.name, objects.name, entry.SyncID, entry.ID); err != nil {
+					return err
+				}
+				if action.name == "Manage with Metric Sync" {
+					if _, err := fmt.Fprintln(w, "    Keep the object ID and apply the YAML settings."); err != nil {
+						return err
+					}
+				}
+				if entry.Reason != "" {
+					if _, err := fmt.Fprintf(w, "    Reason: %s\n", entry.Reason); err != nil {
+						return err
+					}
+				}
+				for _, id := range entry.AffectedExperimentIDs {
+					if _, err := fmt.Fprintf(w, "    Affected experiment: %s\n", id); err != nil {
+						return err
+					}
+				}
+				fields := make([]string, 0, len(entry.Changes))
+				for field := range entry.Changes {
+					fields = append(fields, field)
+				}
+				sort.Strings(fields)
+				for _, field := range fields {
+					change := entry.Changes[field]
+					before, after := string(change.Before), string(change.After)
+					if before == "" {
+						before = "unknown"
+					}
+					if after == "" {
+						after = "unknown"
+					}
+					if _, err := fmt.Fprintf(w, "    %s: %s -> %s\n", field, before, after); err != nil {
+						return err
+					}
+				}
+			}
+		}
+	}
+	for _, warning := range result.Warnings {
+		if _, err := fmt.Fprintf(w, "  Warning: %s\n", warning); err != nil {
+			return err
+		}
+	}
+	for _, issue := range result.Errors {
+		id := ""
+		if issue.SyncID != nil {
+			id = *issue.SyncID
+		}
+		if _, err := fmt.Fprintf(w, "  Error: %s %s %s: %s\n", issue.ObjectType, id, issue.Path, issue.Message); err != nil {
+			return err
+		}
+		if issue.Remediation != "" {
+			if _, err := fmt.Fprintf(w, "    Correction: %s\n", issue.Remediation); err != nil {
+				return err
+			}
+		}
+	}
+	if api.IsFailureStatus(result.Status) && len(result.Errors) == 0 {
+		_, err := fmt.Fprintf(w, "  Operation %s failed. The server returned no error details.\n", result.MetricSyncID)
+		return err
+	}
+	return nil
 }
