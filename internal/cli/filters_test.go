@@ -128,7 +128,7 @@ func TestFilterRequestBody(t *testing.T) {
 				}
 				var received map[string]any
 				server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-					if r.Method != http.MethodPost || r.URL.Path != "/api/unstable/ffe/metric-syncs" {
+					if r.Method != http.MethodPost || r.URL.Path != "/api/v2/experiments/metric-syncs" {
 						t.Errorf("unexpected request: %s %s", r.Method, r.URL)
 						w.WriteHeader(500)
 						return

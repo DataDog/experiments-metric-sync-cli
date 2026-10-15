@@ -60,7 +60,7 @@ func (c *Client) Submit(ctx context.Context, operation string, request model.Syn
 	}
 	values.Set("force_delete", strconv.FormatBool(options.ForceDelete))
 
-	endpoint := c.baseURL + "/api/unstable/ffe/metric-syncs?" + values.Encode()
+	endpoint := c.baseURL + "/api/v2/experiments/metric-syncs?" + values.Encode()
 	body, err := json.Marshal(request)
 	if err != nil {
 		return nil, err
@@ -88,7 +88,7 @@ func (c *Client) Submit(ctx context.Context, operation string, request model.Syn
 }
 
 func (c *Client) GetStatus(ctx context.Context, metricSyncID string) (*Operation, error) {
-	endpoint := c.baseURL + "/api/unstable/ffe/metric-syncs/" + url.PathEscape(metricSyncID)
+	endpoint := c.baseURL + "/api/v2/experiments/metric-syncs/" + url.PathEscape(metricSyncID)
 	c.info("status request", slog.String("endpoint", endpoint))
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
@@ -105,7 +105,7 @@ func (c *Client) GetStatus(ctx context.Context, metricSyncID string) (*Operation
 }
 
 func (c *Client) GetResult(ctx context.Context, metricSyncID string) (*Result, error) {
-	endpoint := c.baseURL + "/api/unstable/ffe/metric-syncs/" + url.PathEscape(metricSyncID) + "/result"
+	endpoint := c.baseURL + "/api/v2/experiments/metric-syncs/" + url.PathEscape(metricSyncID) + "/result"
 	c.info("result request", slog.String("endpoint", endpoint))
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
