@@ -79,6 +79,35 @@ For YAML fields and measure references, see
 [Sync Experiment Metrics from YAML](https://docs.datadoghq.com/experiments/defining_metrics/metric_sync/#yaml-reference).
 See [examples](examples/) for complete YAML files.
 
+### Adopting manually created metrics and sources
+
+To adopt existing manual objects by name, set `options.upgrade_mode: by_name`
+and add `upgrade_by_name: true` to each metric or warehouse metric source you
+want to adopt. The global option alone does not opt objects into adoption.
+Add these fields to your complete definitions:
+
+```yaml
+options:
+  upgrade_mode: by_name
+warehouse_metric_sources:
+  - sync_id: orders
+    name: Orders
+    upgrade_by_name: true
+    # Include the remaining source fields.
+metrics:
+  - sync_id: revenue
+    name: Revenue
+    upgrade_by_name: true
+    # Include the remaining metric fields.
+```
+
+Names must match exactly. A single matching manual object is adopted; no match
+creates a new object. Multiple matching manual objects are blocked: use
+`options.upgrade_mode: by_id` and the intended object's `existing_id` instead.
+Omitting `upgrade_by_name` or setting it to `false` leaves that object opted out
+of name-based adoption. Run `plan` and review upgrades and definition changes
+before `execute`, since adoption can update the existing object to match the YAML.
+
 ### Properties and filters
 
 Source properties use `property_name`, `property_column`, and `property_type`
