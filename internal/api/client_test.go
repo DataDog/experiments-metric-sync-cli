@@ -18,6 +18,9 @@ import (
 
 func TestGetStatusDecodesJSONAPIEnvelope(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/api/v2/experiments/metric-syncs/operation-id" {
+			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+		}
 		if got := r.Header.Get("DD-API-KEY"); got != "api" {
 			t.Fatalf("missing api key header")
 		}
@@ -57,6 +60,9 @@ func TestGetStatusDecodesJSONAPIEnvelope(t *testing.T) {
 
 func TestGetResultNotReady(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != "/api/v2/experiments/metric-syncs/operation-id/result" {
+			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+		}
 		w.Header().Set("Retry-After", "2")
 		w.WriteHeader(http.StatusAccepted)
 		_, _ = w.Write([]byte(`{"data":{"id":"operation-id","attributes":{"message":"not ready"}}}`))
@@ -72,8 +78,8 @@ func TestGetResultNotReady(t *testing.T) {
 	if !ok {
 		t.Fatalf("got %T", err)
 	}
-	if notReady.RetryAfter != "2" {
-		t.Fatalf("got retry-after %q", notReady.RetryAfter)
+	if notReady.RetryAfter != "2" || notReady.Message != "not ready" {
+		t.Fatalf("got retry-after %q and message %q, want %q and %q", notReady.RetryAfter, notReady.Message, "2", "not ready")
 	}
 }
 
