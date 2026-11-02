@@ -46,6 +46,7 @@ type SyncConfig struct {
 type WarehouseMetricSource struct {
 	SyncID                     string              `json:"sync_id" yaml:"sync_id"`
 	ExistingID                 string              `json:"existing_id,omitempty" yaml:"existing_id,omitempty"`
+	UpgradeByName              bool                `json:"upgrade_by_name,omitempty" yaml:"upgrade_by_name,omitempty"`
 	Name                       string              `json:"name" yaml:"name"`
 	Description                string              `json:"description,omitempty" yaml:"description,omitempty"`
 	SQL                        string              `json:"sql" yaml:"sql"`
@@ -84,6 +85,7 @@ type Property struct {
 type Metric struct {
 	SyncID                      string                       `json:"sync_id" yaml:"sync_id"`
 	ExistingID                  string                       `json:"existing_id,omitempty" yaml:"existing_id,omitempty"`
+	UpgradeByName               bool                         `json:"upgrade_by_name,omitempty" yaml:"upgrade_by_name,omitempty"`
 	Name                        string                       `json:"name" yaml:"name"`
 	Description                 string                       `json:"description,omitempty" yaml:"description,omitempty"`
 	MetricType                  string                       `json:"metric_type" yaml:"metric_type"`

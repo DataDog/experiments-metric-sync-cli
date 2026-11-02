@@ -97,8 +97,7 @@
         },
         "sql": {
           "type": "string",
-          "minLength": 1,
-          "maxLength": 65535
+          "minLength": 1
         },
         "timestamp_column": {
           "$ref": "#/$defs/non_empty_string"

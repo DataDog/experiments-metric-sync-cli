@@ -79,6 +79,35 @@ For YAML fields and measure references, see
 [Sync Experiment Metrics from YAML](https://docs.datadoghq.com/experiments/defining_metrics/metric_sync/#yaml-reference).
 See [examples](examples/) for complete YAML files.
 
+### Adopting manually created metrics and sources
+
+To adopt existing manual objects by name, set `options.upgrade_mode: by_name`
+and add `upgrade_by_name: true` to each metric or warehouse metric source you
+want to adopt. The global option alone does not opt objects into adoption.
+Add these fields to your complete definitions:
+
+```yaml
+options:
+  upgrade_mode: by_name
+warehouse_metric_sources:
+  - sync_id: orders
+    name: Orders
+    upgrade_by_name: true
+    # Include the remaining source fields.
+metrics:
+  - sync_id: revenue
+    name: Revenue
+    upgrade_by_name: true
+    # Include the remaining metric fields.
+```
+
+Names must match exactly. A single matching manual object is adopted; no match
+creates a new object. Multiple matching manual objects are blocked: use
+`options.upgrade_mode: by_id` and the intended object's `existing_id` instead.
+Omitting `upgrade_by_name` or setting it to `false` leaves that object opted out
+of name-based adoption. Run `plan` and review upgrades and definition changes
+before `execute`, since adoption can update the existing object to match the YAML.
+
 ### Properties and filters
 
 Source properties use `property_name`, `property_column`, and `property_type`
@@ -163,6 +192,17 @@ metric-sync execute ./metrics --no-poll
 
 A result that is still pending exits with code 2; retry `result` once the
 operation completes.
+
+HTTP 429 responses are retried for all API requests, including submission and
+warehouse lookup, up to eight attempts total and three minutes of retry waiting
+per request. The command's `--timeout` can stop retries sooner. Retries honor
+`Retry-After` (seconds or HTTP date) and Datadog's `X-RateLimit-Reset` (seconds
+until reset), using the longer valid delay plus up to one second of jitter.
+Missing or invalid guidance uses exponential backoff with jitter, starting at
+1–2 seconds and capped at 30 seconds. A server delay beyond the remaining retry
+budget returns an error instead of retrying early. Submission retries preserve
+the payload and `Idempotency-Key`. Other HTTP errors and transport failures are
+not retried.
 
 Warehouse auto-selection still uses
 `GET /api/unstable/ffe/warehouse-connections` when a source omits its connection
