@@ -1,6 +1,6 @@
 # Datadog Experiments Metric Sync CLI
 
-Datadog Experiments Metric Sync CLI prepares metric sync definitions, submits them to Datadog's Metric Sync API, polls the async operation, and prints the results.
+Datadog Experiments Metric Sync CLI prepares metric sync definitions, submits them to Datadog's public Experiments v2 Metric Sync API, polls the async operation, and prints the results.
 
 Use one YAML document per file. To split definitions, use multiple files in the
 same directory with the same sync tag and options. Additional documents after a
@@ -167,3 +167,46 @@ re-running the same file starts a new operation instead of replaying an old one.
 
 Use `--idempotency-key` only when you intentionally want to replay or debug a
 specific request.
+
+## API behavior
+
+The CLI uses these public Experiments v2 routes:
+
+```text
+POST /api/v2/experiments/metric-syncs
+GET  /api/v2/experiments/metric-syncs/{metric_sync_id}
+GET  /api/v2/experiments/metric-syncs/{metric_sync_id}/result
+```
+
+These routes must be available on your Datadog site before using this CLI.
+`plan` and `execute` poll by default and exit with code 1 on terminal failure.
+
+To submit without waiting, then inspect the returned operation ID:
+
+```sh
+metric-sync plan ./metrics --no-poll --idempotency-key ci-preview-123
+metric-sync status <metric_sync_id>
+metric-sync result <metric_sync_id>
+metric-sync execute ./metrics --no-poll
+```
+
+A result that is still pending exits with code 2; retry `result` once the
+operation completes.
+
+HTTP 429 responses are retried for all API requests, including submission and
+warehouse lookup, up to eight attempts total and three minutes of retry waiting
+per request. The command's `--timeout` can stop retries sooner. Retries honor
+`Retry-After` (seconds or HTTP date) and Datadog's `X-RateLimit-Reset` (seconds
+until reset), using the longer valid delay plus up to one second of jitter.
+Missing or invalid guidance uses exponential backoff with jitter, starting at
+1–2 seconds and capped at 30 seconds. A server delay beyond the remaining retry
+budget returns an error instead of retrying early. Submission retries preserve
+the payload and `Idempotency-Key`. Other HTTP errors and transport failures are
+not retried.
+
+Warehouse auto-selection still uses
+`GET /api/unstable/ffe/warehouse-connections` when a source omits its connection
+ID and no top-level `warehouse_connection_id` is set. It selects the sole
+connection and errors when zero or multiple connections exist. To skip this
+unstable lookup, set `warehouse_connection_id` at the top level of the YAML or
+on every warehouse metric source.

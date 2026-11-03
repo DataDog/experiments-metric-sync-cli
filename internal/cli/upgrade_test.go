@@ -43,7 +43,7 @@ func TestUpgradeByNameThroughCommands(t *testing.T) {
 				}
 				var received map[string][]map[string]json.RawMessage
 				server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-					if r.Method != http.MethodPost || r.URL.Path != "/api/unstable/ffe/metric-syncs" {
+					if r.Method != http.MethodPost || r.URL.Path != "/api/v2/experiments/metric-syncs" {
 						t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
 						w.WriteHeader(http.StatusBadRequest)
 						return

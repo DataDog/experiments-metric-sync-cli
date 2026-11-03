@@ -28,6 +28,7 @@ type Client struct {
 	appKey     string
 	httpClient *http.Client
 	logger     DebugLogger
+	retrySleep func(context.Context, time.Duration) error
 }
 
 type DebugLogger interface {
@@ -60,7 +61,7 @@ func (c *Client) Submit(ctx context.Context, operation string, request model.Syn
 	}
 	values.Set("force_delete", strconv.FormatBool(options.ForceDelete))
 
-	endpoint := c.baseURL + "/api/unstable/ffe/metric-syncs?" + values.Encode()
+	endpoint := c.baseURL + "/api/v2/experiments/metric-syncs?" + values.Encode()
 	body, err := json.Marshal(request)
 	if err != nil {
 		return nil, err
@@ -88,7 +89,7 @@ func (c *Client) Submit(ctx context.Context, operation string, request model.Syn
 }
 
 func (c *Client) GetStatus(ctx context.Context, metricSyncID string) (*Operation, error) {
-	endpoint := c.baseURL + "/api/unstable/ffe/metric-syncs/" + url.PathEscape(metricSyncID)
+	endpoint := c.baseURL + "/api/v2/experiments/metric-syncs/" + url.PathEscape(metricSyncID)
 	c.info("status request", slog.String("endpoint", endpoint))
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
@@ -105,7 +106,7 @@ func (c *Client) GetStatus(ctx context.Context, metricSyncID string) (*Operation
 }
 
 func (c *Client) GetResult(ctx context.Context, metricSyncID string) (*Result, error) {
-	endpoint := c.baseURL + "/api/unstable/ffe/metric-syncs/" + url.PathEscape(metricSyncID) + "/result"
+	endpoint := c.baseURL + "/api/v2/experiments/metric-syncs/" + url.PathEscape(metricSyncID) + "/result"
 	c.info("result request", slog.String("endpoint", endpoint))
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
@@ -152,6 +153,24 @@ func (c *Client) do(req *http.Request, output any) error {
 }
 
 func (c *Client) doRaw(req *http.Request) ([]byte, error) {
+	resp, body, err := c.requestWithRetries(req)
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.StatusCode == http.StatusAccepted && req.Method == http.MethodGet && strings.HasSuffix(req.URL.Path, "/result") {
+		pendingMessage := decodePendingMessage(body)
+		return nil, &ResultNotReadyError{RetryAfter: resp.Header.Get("Retry-After"), Message: pendingMessage}
+	}
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, decodeAPIError(resp.StatusCode, body)
+	}
+
+	return body, nil
+}
+
+func (c *Client) requestOnce(req *http.Request) (*http.Response, []byte, error) {
 	start := time.Now()
 	c.info("http request",
 		slog.String("method", req.Method),
@@ -164,7 +183,7 @@ func (c *Client) doRaw(req *http.Request) ([]byte, error) {
 			slog.String("url", req.URL.String()),
 			slog.Any("error", err),
 		)
-		return nil, err
+		return nil, nil, err
 	}
 	defer resp.Body.Close()
 
@@ -176,7 +195,7 @@ func (c *Client) doRaw(req *http.Request) ([]byte, error) {
 			slog.Int("status", resp.StatusCode),
 			slog.Any("error", err),
 		)
-		return nil, err
+		return nil, nil, err
 	}
 	c.info("http response",
 		slog.String("method", req.Method),
@@ -186,16 +205,7 @@ func (c *Client) doRaw(req *http.Request) ([]byte, error) {
 		slog.String("body", string(body)),
 	)
 
-	if resp.StatusCode == http.StatusAccepted && req.Method == http.MethodGet && strings.HasSuffix(req.URL.Path, "/result") {
-		pendingMessage := decodePendingMessage(body)
-		return nil, &ResultNotReadyError{RetryAfter: resp.Header.Get("Retry-After"), Message: pendingMessage}
-	}
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, decodeAPIError(resp.StatusCode, body)
-	}
-
-	return body, nil
+	return resp, body, nil
 }
 
 func (c *Client) info(message string, attrs ...slog.Attr) {
