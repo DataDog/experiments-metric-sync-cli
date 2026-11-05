@@ -223,8 +223,8 @@ func TestValidateThresholdMetricRejectsStandardTimeframeAndWinsorization(t *test
 				ThresholdAggregationType:    "count",
 				ThresholdComparisonOperator: "gt",
 				ThresholdBreachValue:        floatPtr(10),
-				TimeframeStartValue:         intPtr(1),
-				TimeframeEndValue:           intPtr(7),
+				TimeframeStartValue:         floatPtr(1),
+				TimeframeEndValue:           floatPtr(7),
 				TimeframeUnit:               "days",
 				WinsorLowerPercentile:       floatPtr(0.01),
 				WinsorUpperPercentile:       floatPtr(0.99),
@@ -296,10 +296,6 @@ func thresholdConfig(metric model.Metric) model.SyncConfig {
 }
 
 func floatPtr(v float64) *float64 {
-	return &v
-}
-
-func intPtr(v int) *int {
 	return &v
 }
 

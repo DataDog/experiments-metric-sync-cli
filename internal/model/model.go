@@ -34,7 +34,7 @@ func (o Options) EqualWithDefaults(other Options) bool {
 }
 
 type SyncConfig struct {
-	SchemaVersion          int                     `json:"schema_version" yaml:"schema_version"`
+	SchemaVersion          Integer                 `json:"schema_version" yaml:"schema_version"`
 	SyncTag                string                  `json:"sync_tag" yaml:"sync_tag"`
 	ReferenceURL           string                  `json:"reference_url,omitempty" yaml:"reference_url,omitempty"`
 	WarehouseConnectionID  string                  `json:"warehouse_connection_id,omitempty" yaml:"warehouse_connection_id,omitempty"`
@@ -101,8 +101,8 @@ type Metric struct {
 type SimpleMetricAggregation struct {
 	Operation             string          `json:"operation" yaml:"operation"`
 	Measure               MeasureRef      `json:"measure" yaml:"measure"`
-	TimeframeStartValue   *int            `json:"timeframe_start_value,omitempty" yaml:"timeframe_start_value,omitempty"`
-	TimeframeEndValue     *int            `json:"timeframe_end_value,omitempty" yaml:"timeframe_end_value,omitempty"`
+	TimeframeStartValue   *float64        `json:"timeframe_start_value,omitempty" yaml:"timeframe_start_value,omitempty"`
+	TimeframeEndValue     *float64        `json:"timeframe_end_value,omitempty" yaml:"timeframe_end_value,omitempty"`
 	TimeframeUnit         string          `json:"timeframe_unit,omitempty" yaml:"timeframe_unit,omitempty"`
 	PropertyFilters       PropertyFilters `json:"property_filters,omitempty" yaml:"property_filters,omitempty"`
 	WinsorLowerPercentile *float64        `json:"winsor_lower_percentile,omitempty" yaml:"winsor_lower_percentile,omitempty"`
@@ -110,6 +110,9 @@ type SimpleMetricAggregation struct {
 	WinsorLowerFixedValue *float64        `json:"winsor_lower_fixed_value,omitempty" yaml:"winsor_lower_fixed_value,omitempty"`
 	WinsorUpperFixedValue *float64        `json:"winsor_upper_fixed_value,omitempty" yaml:"winsor_upper_fixed_value,omitempty"`
 	WinsorizationStrategy *string         `json:"winsorization_strategy,omitempty" yaml:"winsorization_strategy,omitempty"`
+	// Without aging_threshold_days, the aging cutoff is timeframe_end_value in timeframe_unit.
+	AgingThresholdDays       *Integer `json:"aging_threshold_days,omitempty" yaml:"aging_threshold_days,omitempty"`
+	EnableAgingSubjectFilter *bool    `json:"enable_aging_subject_filter,omitempty" yaml:"enable_aging_subject_filter,omitempty"`
 	// Threshold aggregation fields. Type, comparison operator, and breach value are
 	// required when operation is "threshold"; timeframe fields are optional as a pair.
 	ThresholdAggregationType    string   `json:"threshold_aggregation_type,omitempty" yaml:"threshold_aggregation_type,omitempty"`
@@ -125,13 +128,9 @@ type RatioMetricAggregation struct {
 }
 
 type PercentileMetricAggregation struct {
-	PropertyFilters     PropertyFilters `json:"property_filters,omitempty" yaml:"property_filters,omitempty"`
-	Operation           string          `json:"operation" yaml:"operation"`
-	Measure             MeasureRef      `json:"measure" yaml:"measure"`
-	Percentile          float64         `json:"percentile" yaml:"percentile"`
-	TimeframeStartValue *int            `json:"timeframe_start_value,omitempty" yaml:"timeframe_start_value,omitempty"`
-	TimeframeEndValue   *int            `json:"timeframe_end_value,omitempty" yaml:"timeframe_end_value,omitempty"`
-	TimeframeUnit       string          `json:"timeframe_unit,omitempty" yaml:"timeframe_unit,omitempty"`
+	PropertyFilters PropertyFilters `json:"property_filters,omitempty" yaml:"property_filters,omitempty"`
+	Measure         MeasureRef      `json:"measure" yaml:"measure"`
+	Percentile      float64         `json:"percentile" yaml:"percentile"`
 }
 
 type MeasureRef struct {

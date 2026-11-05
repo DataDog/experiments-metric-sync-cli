@@ -191,3 +191,89 @@ func TestLoadFilesKeepsSeparateDocuments(t *testing.T) {
 		t.Fatalf("files=%v, error=%v", files, err)
 	}
 }
+
+func TestLoadFileAgingAndFractionalTimeframe(t *testing.T) {
+	path := writeYAML(t, `
+schema_version: 1
+sync_tag: checkout
+metrics:
+  - sync_id: met
+    name: met
+    metric_type: simple
+    simple_metric_aggregation:
+      operation: sum
+      timeframe_start_value: 0.5
+      timeframe_end_value: 1.5
+      timeframe_unit: weeks
+      enable_aging_subject_filter: true
+      aging_threshold_days: 14
+      measure:
+        warehouse_metric_source_sync_id: src
+        measure_sync_id: m
+`)
+
+	config, err := LoadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	agg := config.Metrics[0].SimpleMetricAggregation
+	if agg.TimeframeStartValue == nil || *agg.TimeframeStartValue != 0.5 || agg.TimeframeEndValue == nil || *agg.TimeframeEndValue != 1.5 {
+		t.Fatalf("timeframe = %v..%v, want 0.5..1.5", agg.TimeframeStartValue, agg.TimeframeEndValue)
+	}
+	if agg.EnableAgingSubjectFilter == nil || !*agg.EnableAgingSubjectFilter || agg.AgingThresholdDays == nil || *agg.AgingThresholdDays != 14 {
+		t.Fatalf("aging = %v/%v, want true/14", agg.EnableAgingSubjectFilter, agg.AgingThresholdDays)
+	}
+}
+
+func TestLoadFileRejectsPercentileTimeframe(t *testing.T) {
+	path := writeYAML(t, `
+schema_version: 1
+sync_tag: checkout
+metrics:
+  - sync_id: met
+    name: met
+    metric_type: percentile
+    percentile_metric_aggregation:
+      percentile: 0.9
+      timeframe_end_value: 7
+      measure:
+        warehouse_metric_source_sync_id: src
+        measure_sync_id: m
+`)
+
+	if _, err := LoadFile(path); err == nil || !strings.Contains(err.Error(), "timeframe_end_value") {
+		t.Fatalf("expected unknown timeframe_end_value error, got %v", err)
+	}
+}
+
+func TestLoadFileRejectsFractionalIntegers(t *testing.T) {
+	for _, tc := range []struct {
+		name, schemaVersion, days string
+	}{
+		{name: "fractional aging days", schemaVersion: "1", days: "1.5"},
+		{name: "negative fractional aging days", schemaVersion: "1", days: "-0.5"},
+		{name: "quoted aging days", schemaVersion: "1", days: `"14"`},
+		{name: "fractional schema version", schemaVersion: "1.5", days: "14"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			path := writeYAML(t, `
+schema_version: `+tc.schemaVersion+`
+sync_tag: checkout
+metrics:
+  - sync_id: met
+    name: met
+    metric_type: simple
+    simple_metric_aggregation:
+      operation: sum
+      enable_aging_subject_filter: true
+      aging_threshold_days: `+tc.days+`
+      measure:
+        warehouse_metric_source_sync_id: src
+        measure_sync_id: m
+`)
+			if _, err := LoadFile(path); err == nil || !strings.Contains(err.Error(), "must be an integer") {
+				t.Fatalf("expected integer error, got %v", err)
+			}
+		})
+	}
+}
