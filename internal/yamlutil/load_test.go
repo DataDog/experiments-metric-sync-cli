@@ -245,3 +245,35 @@ metrics:
 		t.Fatalf("expected unknown timeframe_end_value error, got %v", err)
 	}
 }
+
+func TestLoadFileRejectsFractionalIntegers(t *testing.T) {
+	for _, tc := range []struct {
+		name, schemaVersion, days string
+	}{
+		{name: "fractional aging days", schemaVersion: "1", days: "1.5"},
+		{name: "negative fractional aging days", schemaVersion: "1", days: "-0.5"},
+		{name: "quoted aging days", schemaVersion: "1", days: `"14"`},
+		{name: "fractional schema version", schemaVersion: "1.5", days: "14"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			path := writeYAML(t, `
+schema_version: `+tc.schemaVersion+`
+sync_tag: checkout
+metrics:
+  - sync_id: met
+    name: met
+    metric_type: simple
+    simple_metric_aggregation:
+      operation: sum
+      enable_aging_subject_filter: true
+      aging_threshold_days: `+tc.days+`
+      measure:
+        warehouse_metric_source_sync_id: src
+        measure_sync_id: m
+`)
+			if _, err := LoadFile(path); err == nil || !strings.Contains(err.Error(), "must be an integer") {
+				t.Fatalf("expected integer error, got %v", err)
+			}
+		})
+	}
+}

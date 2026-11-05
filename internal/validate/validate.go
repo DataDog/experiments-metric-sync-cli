@@ -306,7 +306,7 @@ func validateCombined(files []model.FileConfig) []Issue {
 	}
 
 	var syncTag string
-	var schemaVersion int
+	var schemaVersion model.Integer
 	sourceIDs := map[string]string{}
 	metricIDs := map[string]string{}
 	sourcesByID := map[string]model.WarehouseMetricSource{}

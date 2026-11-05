@@ -12,11 +12,11 @@ import (
 
 func TestAgingSubjectFilter(t *testing.T) {
 	enabled, disabled := true, false
-	days := func(v int) *int { return &v }
+	days := func(v model.Integer) *model.Integer { return &v }
 	for _, tc := range []struct {
 		name          string
 		enable        *bool
-		days          *int
+		days          *model.Integer
 		end           *float64
 		unit          string
 		operation     string
@@ -58,8 +58,8 @@ func TestAgingSubjectFilter(t *testing.T) {
 
 func TestRatioAgingSubjectFilter(t *testing.T) {
 	enabled := true
-	days := func(v int) *int { return &v }
-	aging := func(end float64, unit string, cutoff *int) model.SimpleMetricAggregation {
+	days := func(v model.Integer) *model.Integer { return &v }
+	aging := func(end float64, unit string, cutoff *model.Integer) model.SimpleMetricAggregation {
 		return model.SimpleMetricAggregation{
 			Operation: "count", Measure: model.MeasureRef{WarehouseMetricSourceSyncID: "src", Kind: "each_record"},
 			TimeframeEndValue: &end, TimeframeUnit: unit, EnableAgingSubjectFilter: &enabled, AgingThresholdDays: cutoff,

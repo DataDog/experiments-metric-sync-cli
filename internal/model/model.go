@@ -34,7 +34,7 @@ func (o Options) EqualWithDefaults(other Options) bool {
 }
 
 type SyncConfig struct {
-	SchemaVersion          int                     `json:"schema_version" yaml:"schema_version"`
+	SchemaVersion          Integer                 `json:"schema_version" yaml:"schema_version"`
 	SyncTag                string                  `json:"sync_tag" yaml:"sync_tag"`
 	ReferenceURL           string                  `json:"reference_url,omitempty" yaml:"reference_url,omitempty"`
 	WarehouseConnectionID  string                  `json:"warehouse_connection_id,omitempty" yaml:"warehouse_connection_id,omitempty"`
@@ -111,8 +111,8 @@ type SimpleMetricAggregation struct {
 	WinsorUpperFixedValue *float64        `json:"winsor_upper_fixed_value,omitempty" yaml:"winsor_upper_fixed_value,omitempty"`
 	WinsorizationStrategy *string         `json:"winsorization_strategy,omitempty" yaml:"winsorization_strategy,omitempty"`
 	// Without aging_threshold_days, the aging cutoff is timeframe_end_value in timeframe_unit.
-	AgingThresholdDays       *int  `json:"aging_threshold_days,omitempty" yaml:"aging_threshold_days,omitempty"`
-	EnableAgingSubjectFilter *bool `json:"enable_aging_subject_filter,omitempty" yaml:"enable_aging_subject_filter,omitempty"`
+	AgingThresholdDays       *Integer `json:"aging_threshold_days,omitempty" yaml:"aging_threshold_days,omitempty"`
+	EnableAgingSubjectFilter *bool    `json:"enable_aging_subject_filter,omitempty" yaml:"enable_aging_subject_filter,omitempty"`
 	// Threshold aggregation fields. Type, comparison operator, and breach value are
 	// required when operation is "threshold"; timeframe fields are optional as a pair.
 	ThresholdAggregationType    string   `json:"threshold_aggregation_type,omitempty" yaml:"threshold_aggregation_type,omitempty"`
