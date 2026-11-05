@@ -127,6 +127,7 @@ func validateMetric(add func(string, string), path string, metric model.Metric) 
 		} else {
 			validateAggregation(add, path+".ratio_metric_aggregation.numerator_aggregation", &metric.RatioMetricAggregation.NumeratorAggregation)
 			validateAggregation(add, path+".ratio_metric_aggregation.denominator_aggregation", &metric.RatioMetricAggregation.DenominatorAggregation)
+			validateRatioAging(add, path+".ratio_metric_aggregation", metric.RatioMetricAggregation)
 		}
 	case "percentile":
 		if metric.PercentileMetricAggregation == nil {
@@ -141,6 +142,7 @@ func validateAggregation(add func(string, string), path string, agg *model.Simpl
 	if agg == nil {
 		return
 	}
+	validateAging(add, path, agg)
 	if agg.WinsorizationStrategy != nil {
 		if !oneOf(*agg.WinsorizationStrategy, "all_assigned_subjects", "nonzero") {
 			add(path+".winsorization_strategy", "must be all_assigned_subjects or nonzero")
@@ -196,6 +198,86 @@ func validateAggregation(add func(string, string), path string, agg *model.Simpl
 	}
 	if agg.WinsorUpperFixedValue != nil {
 		add(path+".winsor_upper_fixed_value", "must be omitted when operation is threshold")
+	}
+}
+
+// agingUnitDays mirrors the analysis pipeline, which derives the aging cutoff from these units.
+var agingUnitDays = map[string]float64{
+	"calendar_days": 1,
+	"days":          1,
+	"weeks":         7,
+	"hours":         1.0 / 24,
+	"minutes":       1.0 / 1440,
+	"seconds":       1.0 / 86400,
+}
+
+func agingEnabled(agg *model.SimpleMetricAggregation) bool {
+	return agg.EnableAgingSubjectFilter != nil && *agg.EnableAgingSubjectFilter
+}
+
+// The API accepts invalid aging configurations and the analysis fails later, so check them here.
+func validateAging(add func(string, string), path string, agg *model.SimpleMetricAggregation) {
+	if agg.AgingThresholdDays != nil && *agg.AgingThresholdDays < 0 {
+		add(path+".aging_threshold_days", "must be 0 or greater")
+	}
+	if !agingEnabled(agg) {
+		if agg.AgingThresholdDays != nil {
+			add(path+".aging_threshold_days", "has no effect unless enable_aging_subject_filter is true")
+		}
+		return
+	}
+	if agg.AgingThresholdDays != nil {
+		return
+	}
+	if agg.Operation == "threshold" {
+		add(path+".aging_threshold_days", "is required when enable_aging_subject_filter is true and operation is threshold")
+		return
+	}
+	if agg.TimeframeEndValue == nil {
+		add(path+".timeframe_end_value", "is required when enable_aging_subject_filter is true and aging_threshold_days is omitted")
+	}
+	if agg.TimeframeUnit == "" {
+		add(path+".timeframe_unit", "is required when enable_aging_subject_filter is true and aging_threshold_days is omitted")
+	} else if _, ok := agingUnitDays[agg.TimeframeUnit]; !ok {
+		add(path+".timeframe_unit", "must be calendar_days, days, weeks, hours, minutes, or seconds when enable_aging_subject_filter is true")
+	}
+}
+
+func agingCutoffDays(agg *model.SimpleMetricAggregation) (float64, bool) {
+	if agg.AgingThresholdDays != nil {
+		return float64(*agg.AgingThresholdDays), true
+	}
+	scale, ok := agingUnitDays[agg.TimeframeUnit]
+	if !ok || agg.TimeframeEndValue == nil {
+		return 0, false
+	}
+	return *agg.TimeframeEndValue * scale, true
+}
+
+// The pipeline filters both sides of a ratio with the numerator's aging cutoff.
+func validateRatioAging(add func(string, string), path string, ratio *model.RatioMetricAggregation) {
+	num, den := &ratio.NumeratorAggregation, &ratio.DenominatorAggregation
+	if agingEnabled(num) != agingEnabled(den) {
+		add(path+".denominator_aggregation.enable_aging_subject_filter", "must match numerator_aggregation.enable_aging_subject_filter")
+		return
+	}
+	if !agingEnabled(num) {
+		return
+	}
+	if num.AgingThresholdDays != nil || den.AgingThresholdDays != nil {
+		numCutoff, numOK := agingCutoffDays(num)
+		denCutoff, denOK := agingCutoffDays(den)
+		if numOK && denOK && numCutoff != denCutoff {
+			add(path+".denominator_aggregation", "must use the same aging cutoff as numerator_aggregation")
+		}
+		return
+	}
+	// Without explicit days the pipeline compares unit and end value directly, so 1 day and 24 hours do not match.
+	if num.TimeframeUnit != den.TimeframeUnit {
+		add(path+".denominator_aggregation.timeframe_unit", "must match numerator_aggregation.timeframe_unit when aging is enabled")
+	}
+	if num.TimeframeEndValue != nil && den.TimeframeEndValue != nil && *num.TimeframeEndValue != *den.TimeframeEndValue {
+		add(path+".denominator_aggregation.timeframe_end_value", "must match numerator_aggregation.timeframe_end_value when aging is enabled")
 	}
 }
 
