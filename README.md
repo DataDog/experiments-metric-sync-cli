@@ -153,7 +153,11 @@ empty list item (for example an entry whose fields are all commented out) in
 collection or member.
 
 A synced collection is locked in Datadog: editing or deleting it in the UI or
-through the API returns `409 Conflict`. Change it in YAML and sync again.
+through the API returns `409 Conflict` with a message that the collection is
+managed by metric sync and must be changed in source control. Change it in YAML
+and sync again, or release its tag (see
+[Releasing or resetting a sync tag](#releasing-or-resetting-a-sync-tag)) to
+manage it by hand.
 
 #### Adopting collections
 
@@ -163,8 +167,13 @@ synced metric. See `examples/collections-adoption.yaml` for name-based
 adoption. With `upgrade_by_name: true`, no matching manual collection creates
 one, a single match is adopted, and multiple matches are blocked. Without
 `upgrade_by_name`, a manual collection with the same name blocks the sync
-instead of creating a duplicate. A collection synced by another tag cannot be
-adopted until that tag releases it. To adopt by ID:
+instead of creating a duplicate.
+
+A collection synced by another tag cannot be adopted, by `existing_id` or by
+`upgrade_by_name`: the result reports it as blocked and names the tag that
+manages it. Release that tag first (see
+[Releasing or resetting a sync tag](#releasing-or-resetting-a-sync-tag)), or
+move the collection's YAML to the tag that manages it. To adopt by ID:
 
 ```yaml
 options:
@@ -187,13 +196,35 @@ and its tag. To remove such a metric:
 
 1. Remove the member from the collection that references it.
 2. Sync the collection's tag.
-3. Delete the metric, or release or reset its tag.
+3. Delete the metric, or release or reset its tag (see
+   [Releasing or resetting a sync tag](#releasing-or-resetting-a-sync-tag)).
 
 Metric collections must be enabled for your Datadog organization. Until they
 are, `plan` previews collection changes, and `execute` fails before writing
 anything when it would create, update, adopt, or delete a collection. That
 includes deleting collections a tag already manages by omitting
 `metric_collections`.
+
+### Releasing or resetting a sync tag
+
+The CLI has no release or reset command. To hand a tag's objects back to manual
+management, call the Metric Sync API directly with the same `DD_API_KEY` and
+`DD_APP_KEY`:
+
+- `POST /api/v2/experiments/metric-syncs/tags/{sync_tag}/release` clears sync
+  ownership from the tag's sources, measures, properties, metrics, and
+  collections. The objects stay active and become manually managed; collections
+  keep their members.
+- `POST /api/v2/experiments/metric-syncs/tags/{sync_tag}/reset?force=true` does
+  the same release and also drops the tag's sync history, so the next sync for
+  the tag starts from a clean lineage.
+
+Released objects are manual objects: to sync them again, adopt them with
+`existing_id` or `upgrade_by_name`. A release or reset is refused while a
+collection under another tag references one of the tag's metrics (see
+[Cross-tag members](#cross-tag-members)). The full contract, unblock steps, and
+rollback runbook are in `dd-source`, in
+`domains/ffe/libs/experimentation/core/metric_sync/schema/schema_v1/README.md`.
 
 ### Properties and filters
 
