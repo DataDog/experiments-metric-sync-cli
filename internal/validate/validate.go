@@ -32,6 +32,7 @@ func ValidateFiles(files []model.FileConfig) []Issue {
 	var issues []Issue
 	for _, file := range files {
 		issues = append(issues, validateConfig(file.Path, file.Config)...)
+		issues = append(issues, validateCollections(file)...)
 	}
 	if len(issues) > 0 {
 		return issues
@@ -60,6 +61,60 @@ func validateConfig(file string, config model.SyncConfig) []Issue {
 		validateMetric(add, fmt.Sprintf("metrics[%d]", i), metric)
 	}
 	return issues
+}
+
+const (
+	collectionNameMinLength = 3
+	collectionNameMaxLength = 40
+	collectionMaxMetrics    = 100
+)
+
+func validateCollections(file model.FileConfig) []Issue {
+	var issues []Issue
+	add := func(path, message string) {
+		issues = append(issues, Issue{File: file.Path, Path: path, Message: message})
+	}
+	if file.MetricCollectionsNull {
+		add("metric_collections", "must not be null; list collections, or use [] or remove the key to declare no collections (this deletes every collection managed by this sync tag)")
+	}
+	syncTag := file.Config.SyncTag
+	for i, collection := range file.Config.MetricCollections {
+		path := fmt.Sprintf("metric_collections[%d]", i)
+		requireSyncID(add, path+".sync_id", collection.SyncID)
+		if length := utf8.RuneCountInString(strings.TrimSpace(collection.Name)); length < collectionNameMinLength || length > collectionNameMaxLength {
+			add(path+".name", fmt.Sprintf("must contain %d to %d characters after trimming whitespace", collectionNameMinLength, collectionNameMaxLength))
+		}
+		if len(collection.Metrics) > collectionMaxMetrics {
+			add(path+".metrics", fmt.Sprintf("must contain at most %d metrics", collectionMaxMetrics))
+		}
+		members := map[[2]string]int{}
+		for j, member := range collection.Metrics {
+			memberPath := fmt.Sprintf("%s.metrics[%d]", path, j)
+			if member.ExistingID != "" {
+				add(memberPath+".existing_id", "collection members must be synced metrics; reference them by metric_sync_id (and metric_sync_tag for a metric synced under another tag)")
+				continue
+			}
+			requireSyncID(add, memberPath+".metric_sync_id", member.MetricSyncID)
+			if member.MetricSyncTag != "" && !syncIDPattern.MatchString(member.MetricSyncTag) {
+				add(memberPath+".metric_sync_tag", "must start with an alphanumeric character and contain only alphanumeric, underscore, dot, colon, or dash characters")
+			}
+			key := [2]string{memberTag(member, syncTag), member.MetricSyncID}
+			if previous, ok := members[key]; ok {
+				add(memberPath, fmt.Sprintf("duplicates %s.metrics[%d] (metric %s/%s)", path, previous, key[0], key[1]))
+			} else {
+				members[key] = j
+			}
+		}
+	}
+	return issues
+}
+
+// memberTag resolves the tag a collection member refers to; an omitted tag means the current one.
+func memberTag(member model.MetricCollectionMember, syncTag string) string {
+	if member.MetricSyncTag == "" {
+		return syncTag
+	}
+	return member.MetricSyncTag
 }
 
 func validateSource(add func(string, string), path string, source model.WarehouseMetricSource) {
@@ -353,6 +408,34 @@ func validateCombined(files []model.FileConfig) []Issue {
 				metricIDs[metric.SyncID] = file.Path
 			}
 			validateMetricRefs(addForFile, fmt.Sprintf("metrics[%d]", i), metric, syncTag, sourcesByID)
+		}
+	}
+
+	collectionIDs := map[string]string{}
+	collectionNames := map[string]string{}
+	for _, file := range files {
+		for i, collection := range file.Config.MetricCollections {
+			path := fmt.Sprintf("metric_collections[%d]", i)
+			if previous, ok := collectionIDs[collection.SyncID]; ok {
+				add(file.Path, path+".sync_id", fmt.Sprintf("duplicates collection sync_id from %s", previous))
+			} else if collection.SyncID != "" {
+				collectionIDs[collection.SyncID] = file.Path
+			}
+			name := strings.TrimSpace(collection.Name)
+			if previous, ok := collectionNames[name]; ok {
+				add(file.Path, path+".name", fmt.Sprintf("duplicates collection name from %s", previous))
+			} else if name != "" {
+				collectionNames[name] = file.Path
+			}
+			for j, member := range collection.Metrics {
+				if memberTag(member, syncTag) != syncTag {
+					// Metrics under other tags are resolved by the server.
+					continue
+				}
+				if _, ok := metricIDs[member.MetricSyncID]; !ok {
+					add(file.Path, fmt.Sprintf("%s.metrics[%d].metric_sync_id", path, j), fmt.Sprintf("does not match a metric sync_id in this operation; define the metric under sync_tag %q or set metric_sync_tag to the tag that syncs it", syncTag))
+				}
+			}
 		}
 	}
 	return issues
