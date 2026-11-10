@@ -138,22 +138,28 @@ metric_collections:
   collection holds at most 100 metrics, and a metric can appear only once in a
   collection.
 - With multiple files, the `metric_collections` entries of all files are
-  combined. A file that omits the key or sets `[]` contributes nothing and does
-  not remove another file's collections.
+  combined. A file that omits the key, or sets it to `[]` or `null`,
+  contributes nothing and does not remove another file's collections.
 
 The combined list is the complete desired set of collections for the sync tag.
-If no file lists any collection (the key is omitted or `[]` everywhere), every
-collection managed by that sync tag is deleted. Deletion is permanent:
-re-adding the YAML later creates a new collection with a new ID. Run `plan` and
-review every `Delete collection` line before `execute`. An explicit
-`metric_collections: null` is rejected so a stray null cannot read as intent.
+If no file lists any collection (the key is omitted, `[]`, or `null` in every
+file), every collection managed by that sync tag is deleted. Deletion is
+permanent: re-adding the YAML later creates a new collection with a new ID. Run
+`plan` and review every `Delete collection` line before `execute`.
+
+A synced collection is locked in Datadog: editing or deleting it in the UI or
+through the API returns `409 Conflict`. Change it in YAML and sync again.
 
 #### Adopting collections
 
 Adoption works like it does for metrics, and is shallow: the collection keeps
 its ID, but its member metrics are not adopted. Every member must still be a
 synced metric. See `examples/collections-adoption.yaml` for name-based
-adoption. To adopt by ID:
+adoption. With `upgrade_by_name: true`, no matching manual collection creates
+one, a single match is adopted, and multiple matches are blocked. Without
+`upgrade_by_name`, a manual collection with the same name blocks the sync
+instead of creating a duplicate. A collection synced by another tag cannot be
+adopted until that tag releases it. To adopt by ID:
 
 ```yaml
 options:
@@ -170,14 +176,19 @@ metric_collections:
 
 A member under another tag must already be synced by that tag; sync the other
 tag first. While a collection references a metric, that metric cannot be
-deleted, released, or reset by its own tag; the result reports the metric, the
-referencing collection and its tag. To remove such a metric:
+deleted by its own tag, even with `force_delete`, and that tag cannot be
+released or reset; the result reports the metric, the referencing collection
+and its tag. To remove such a metric:
 
 1. Remove the member from the collection that references it.
 2. Sync the collection's tag.
-3. Delete, release, or reset the metric with its own tag.
+3. Delete the metric, or release or reset its tag.
 
-Metric collections need server support on your Datadog site.
+Metric collections must be enabled for your Datadog organization. Until they
+are, `plan` previews collection changes, and `execute` fails before writing
+anything when it would create, update, adopt, or delete a collection. That
+includes deleting collections a tag already manages by omitting
+`metric_collections`.
 
 ### Properties and filters
 
@@ -237,7 +248,9 @@ naturally. In local/manual runs, the generated key includes a fresh nonce so
 re-running the same file starts a new operation instead of replaying an old one.
 
 Use `--idempotency-key` only when you intentionally want to replay or debug a
-specific request.
+specific request. Reusing a key with the same request returns the recorded
+result. To apply the same files again after a failed or suspect operation,
+review a fresh `plan`, then run `execute` with a new key.
 
 ## API behavior
 
