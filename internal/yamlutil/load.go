@@ -69,7 +69,9 @@ func hasNullTopLevelKey(data []byte, key string) bool {
 }
 
 func decodeConfig(path string, data []byte) (model.SyncConfig, error) {
-
+	if err := rejectNullListItems(path, data); err != nil {
+		return model.SyncConfig{}, err
+	}
 	decoder := yaml.NewDecoder(bytes.NewReader(data))
 	decoder.KnownFields(true)
 	var config model.SyncConfig
@@ -85,4 +87,60 @@ func decodeConfig(path string, data []byte) (model.SyncConfig, error) {
 	}
 	config.Options = config.Options.WithDefaults()
 	return config, nil
+}
+
+// nullCheckedLists are the top-level lists whose items decode into structs.
+var nullCheckedLists = []string{"warehouse_metric_sources", "metrics", "metric_collections"}
+
+// rejectNullListItems fails on list items that are null, such as an entry whose
+// fields are all commented out. The typed decode silently drops those items, and
+// because the YAML is the desired state, a dropped collection or member would be
+// deleted on the server.
+func rejectNullListItems(path string, data []byte) error {
+	var doc yaml.Node
+	if err := yaml.Unmarshal(data, &doc); err != nil || len(doc.Content) == 0 {
+		// The typed decode reports syntax errors with better context.
+		return nil
+	}
+	root := doc.Content[0]
+	for _, key := range nullCheckedLists {
+		items := mappingValue(root, key)
+		if err := rejectNullItems(path, key, items); err != nil {
+			return err
+		}
+		if key != "metric_collections" || items == nil || items.Kind != yaml.SequenceNode {
+			continue
+		}
+		for i, collection := range items.Content {
+			field := fmt.Sprintf("metric_collections[%d].metrics", i)
+			if err := rejectNullItems(path, field, mappingValue(collection, "metrics")); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func rejectNullItems(path, field string, items *yaml.Node) error {
+	if items == nil || items.Kind != yaml.SequenceNode {
+		return nil
+	}
+	for i, item := range items.Content {
+		if item.Kind == yaml.ScalarNode && item.ShortTag() == "!!null" {
+			return fmt.Errorf("parse %s: line %d: %s[%d] is empty; remove the list item or fill in its fields", path, item.Line, field, i)
+		}
+	}
+	return nil
+}
+
+func mappingValue(node *yaml.Node, key string) *yaml.Node {
+	if node == nil || node.Kind != yaml.MappingNode {
+		return nil
+	}
+	for i := 0; i+1 < len(node.Content); i += 2 {
+		if node.Content[i].Value == key {
+			return node.Content[i+1]
+		}
+	}
+	return nil
 }

@@ -343,3 +343,33 @@ metric_collections:
 		t.Fatalf("expected unknown collection field to be rejected, got %v", err)
 	}
 }
+
+func TestLoadFileRejectsNullListItems(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		body string
+		want string
+	}{
+		{name: "warehouse metric source", body: "warehouse_metric_sources: [~]\n", want: "line 3: warehouse_metric_sources[0] is empty"},
+		{name: "metric", body: "metrics:\n  -\n", want: "line 4: metrics[0] is empty"},
+		{name: "collection", body: "metric_collections: [null]\n", want: "line 3: metric_collections[0] is empty"},
+		{
+			name: "collection with all fields commented out",
+			body: "metric_collections:\n  - sync_id: keep\n    name: Keep\n  -\n    # sync_id: gone\n    # name: Gone\n",
+			want: "line 6: metric_collections[1] is empty",
+		},
+		{
+			name: "collection member",
+			body: "metric_collections:\n  - sync_id: keep\n    name: Keep\n    metrics:\n      - metric_sync_id: met\n      -\n",
+			want: "line 8: metric_collections[0].metrics[1] is empty",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			path := writeYAML(t, "schema_version: 1\nsync_tag: checkout\n"+tc.body)
+			_, err := LoadFile(path)
+			if err == nil || !strings.Contains(err.Error(), path) || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("expected error containing %q and the file path, got %v", tc.want, err)
+			}
+		})
+	}
+}
