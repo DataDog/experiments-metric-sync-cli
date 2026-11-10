@@ -44,7 +44,7 @@ type SyncConfig struct {
 	// Nil and empty both serialize as an omitted key, which the server treats as
 	// "no desired collections".
 	MetricCollections []MetricCollection `json:"metric_collections,omitempty" yaml:"metric_collections,omitempty"`
-	Options                Options                 `json:"-" yaml:"options,omitempty"`
+	Options           Options            `json:"-" yaml:"options,omitempty"`
 }
 
 type WarehouseMetricSource struct {

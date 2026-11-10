@@ -5,11 +5,13 @@
 package output
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/DataDog/experiments-metric-sync-cli/internal/api"
@@ -311,7 +313,7 @@ func printResultDetails(w io.Writer, result *api.Result) error {
 		for _, objects := range []struct {
 			name    string
 			entries []api.DiffEntry
-		}{{"source", action.bucket.WarehouseMetricSources}, {"metric", action.bucket.Metrics}} {
+		}{{"source", action.bucket.WarehouseMetricSources}, {"metric", action.bucket.Metrics}, {"collection", action.bucket.MetricCollections}} {
 			for _, entry := range objects.entries {
 				if _, err := fmt.Fprintf(w, "  %s %s %s (ID: %s)\n", action.name, objects.name, entry.SyncID, entry.ID); err != nil {
 					return err
@@ -319,6 +321,11 @@ func printResultDetails(w io.Writer, result *api.Result) error {
 				if action.name == "Manage with Metric Sync" {
 					if _, err := fmt.Fprintln(w, "    Keep the object ID and apply the YAML settings."); err != nil {
 						return err
+					}
+					if objects.name == "collection" {
+						if _, err := fmt.Fprintln(w, "    Member metrics are not adopted; each member must be a metric synced by its own tag."); err != nil {
+							return err
+						}
 					}
 				}
 				if entry.Reason != "" {
@@ -338,6 +345,19 @@ func printResultDetails(w io.Writer, result *api.Result) error {
 				sort.Strings(fields)
 				for _, field := range fields {
 					change := entry.Changes[field]
+					if objects.name == "collection" && field == "metrics" {
+						if lines, ok := memberChangeLines(change); ok {
+							if _, err := fmt.Fprintf(w, "    metrics:\n"); err != nil {
+								return err
+							}
+							for _, line := range lines {
+								if _, err := fmt.Fprintf(w, "      %s\n", line); err != nil {
+									return err
+								}
+							}
+							continue
+						}
+					}
 					before, after := string(change.Before), string(change.After)
 					if before == "" {
 						before = "unknown"
@@ -362,7 +382,8 @@ func printResultDetails(w io.Writer, result *api.Result) error {
 		if issue.SyncID != nil {
 			id = *issue.SyncID
 		}
-		if _, err := fmt.Fprintf(w, "  Error: %s %s %s: %s\n", issue.ObjectType, id, issue.Path, issue.Message); err != nil {
+		subject := strings.Join(nonEmpty(issue.ObjectType, id, issue.Path), " ")
+		if _, err := fmt.Fprintf(w, "  Error: %s: %s\n", subject, issue.Message); err != nil {
 			return err
 		}
 		if issue.Remediation != "" {
@@ -376,4 +397,87 @@ func printResultDetails(w io.Writer, result *api.Result) error {
 		return err
 	}
 	return nil
+}
+
+func nonEmpty(values ...string) []string {
+	result := make([]string, 0, len(values))
+	for _, value := range values {
+		if value != "" {
+			result = append(result, value)
+		}
+	}
+	return result
+}
+
+type collectionMember struct {
+	MetricSyncTag *string `json:"metric_sync_tag"`
+	MetricSyncID  *string `json:"metric_sync_id"`
+}
+
+// decodeMembers reads an ordered member list; null means no members. It fails
+// when an entry does not carry both member keys, so callers can fall back to raw JSON.
+func decodeMembers(raw json.RawMessage) ([]string, bool) {
+	if len(raw) == 0 {
+		return nil, false
+	}
+	var members []collectionMember
+	if err := json.Unmarshal(raw, &members); err != nil {
+		return nil, false
+	}
+	result := make([]string, 0, len(members))
+	for _, member := range members {
+		if member.MetricSyncTag == nil || member.MetricSyncID == nil {
+			return nil, false
+		}
+		result = append(result, *member.MetricSyncTag+"/"+*member.MetricSyncID)
+	}
+	return result, true
+}
+
+func memberChangeLines(change api.FieldChange) ([]string, bool) {
+	before, ok := decodeMembers(change.Before)
+	if !ok {
+		return nil, false
+	}
+	after, ok := decodeMembers(change.After)
+	if !ok {
+		return nil, false
+	}
+	inBefore := map[string]bool{}
+	for _, member := range before {
+		inBefore[member] = true
+	}
+	inAfter := map[string]bool{}
+	for _, member := range after {
+		inAfter[member] = true
+	}
+	var added, removed []string
+	for _, member := range after {
+		if !inBefore[member] {
+			added = append(added, member)
+		}
+	}
+	for _, member := range before {
+		if !inAfter[member] {
+			removed = append(removed, member)
+		}
+	}
+	lines := []string{"before: " + memberList(before), "after: " + memberList(after)}
+	if len(added) > 0 {
+		lines = append(lines, "added: "+strings.Join(added, ", "))
+	}
+	if len(removed) > 0 {
+		lines = append(lines, "removed: "+strings.Join(removed, ", "))
+	}
+	if len(added) == 0 && len(removed) == 0 && strings.Join(before, ",") != strings.Join(after, ",") {
+		lines = append(lines, "order changed")
+	}
+	return lines, true
+}
+
+func memberList(members []string) string {
+	if len(members) == 0 {
+		return "(none)"
+	}
+	return "[" + strings.Join(members, ", ") + "]"
 }
