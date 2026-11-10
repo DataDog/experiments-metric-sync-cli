@@ -180,7 +180,4 @@ type MetricCollectionMember struct {
 type FileConfig struct {
 	Path   string
 	Config SyncConfig
-	// MetricCollectionsNull records an explicit YAML null for metric_collections,
-	// which decodes to the same nil slice as an omitted key.
-	MetricCollectionsNull bool
 }

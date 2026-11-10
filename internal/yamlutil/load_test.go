@@ -278,18 +278,19 @@ metrics:
 	}
 }
 
-func TestLoadFilesMetricCollectionsNullDetection(t *testing.T) {
+// A null metric_collections decodes like an omitted key, as null does for the other
+// top-level lists; both declare no collections.
+func TestLoadFilesMetricCollectionsNullIsOmitted(t *testing.T) {
 	for _, tc := range []struct {
-		name     string
-		body     string
-		wantNull bool
-		wantNil  bool
+		name    string
+		body    string
+		wantNil bool
 	}{
-		{name: "null", body: "metric_collections: null\n", wantNull: true, wantNil: true},
-		{name: "tilde", body: "metric_collections: ~\n", wantNull: true, wantNil: true},
-		{name: "empty value", body: "metric_collections:\n", wantNull: true, wantNil: true},
-		{name: "empty list", body: "metric_collections: []\n", wantNull: false, wantNil: false},
-		{name: "omitted", body: "", wantNull: false, wantNil: true},
+		{name: "null", body: "metric_collections: null\n", wantNil: true},
+		{name: "tilde", body: "metric_collections: ~\n", wantNil: true},
+		{name: "empty value", body: "metric_collections:\n", wantNil: true},
+		{name: "empty list", body: "metric_collections: []\n", wantNil: false},
+		{name: "omitted", body: "", wantNil: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			path := writeYAML(t, "schema_version: 1\nsync_tag: checkout\n"+tc.body)
@@ -298,9 +299,6 @@ func TestLoadFilesMetricCollectionsNullDetection(t *testing.T) {
 				t.Fatal(err)
 			}
 			file := files[0]
-			if file.MetricCollectionsNull != tc.wantNull {
-				t.Fatalf("MetricCollectionsNull = %v, want %v", file.MetricCollectionsNull, tc.wantNull)
-			}
 			if (file.Config.MetricCollections == nil) != tc.wantNil {
 				t.Fatalf("MetricCollections nil = %v, want %v", file.Config.MetricCollections == nil, tc.wantNil)
 			}

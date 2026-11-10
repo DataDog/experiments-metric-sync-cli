@@ -74,9 +74,6 @@ func validateCollections(file model.FileConfig) []Issue {
 	add := func(path, message string) {
 		issues = append(issues, Issue{File: file.Path, Path: path, Message: message})
 	}
-	if file.MetricCollectionsNull {
-		add("metric_collections", "must not be null; list collections, or use [] or remove the key to declare no collections (this deletes every collection managed by this sync tag)")
-	}
 	syncTag := file.Config.SyncTag
 	for i, collection := range file.Config.MetricCollections {
 		path := fmt.Sprintf("metric_collections[%d]", i)

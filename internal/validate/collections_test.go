@@ -63,7 +63,6 @@ func TestValidateMetricCollections(t *testing.T) {
 		{name: "undefined same-tag member", files: []model.FileConfig{{Path: "a.yaml", Config: collectionConfig(collection("Core", members("missing")))}}, path: "metric_collections[0].metrics[0].metric_sync_id", want: "does not match a metric sync_id"},
 		{name: "member existing_id", files: []model.FileConfig{{Path: "a.yaml", Config: collectionConfig(collection("Core", []model.MetricCollectionMember{{ExistingID: "00000000-0000-0000-0000-000000000000"}}))}}, path: "metric_collections[0].metrics[0].existing_id", want: "collection members must be synced metrics; reference them by metric_sync_id"},
 		{name: "invalid member tag", files: []model.FileConfig{{Path: "a.yaml", Config: collectionConfig(collection("Core", []model.MetricCollectionMember{{MetricSyncTag: "-bad", MetricSyncID: "x"}}))}}, path: "metric_collections[0].metrics[0].metric_sync_tag", want: "must start with"},
-		{name: "explicit null", files: []model.FileConfig{{Path: "a.yaml", Config: collectionConfig(), MetricCollectionsNull: true}}, path: "metric_collections", want: "must not be null"},
 		{
 			name: "duplicate sync_id across files",
 			files: []model.FileConfig{

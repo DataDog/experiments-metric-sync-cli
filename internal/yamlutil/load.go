@@ -40,32 +40,7 @@ func loadFileConfig(path string) (model.FileConfig, error) {
 	if err != nil {
 		return model.FileConfig{}, err
 	}
-	return model.FileConfig{
-		Path:                  path,
-		Config:                config,
-		MetricCollectionsNull: hasNullTopLevelKey(data, "metric_collections"),
-	}, nil
-}
-
-// hasNullTopLevelKey reports whether the document sets key to an explicit null.
-// The typed decode turns null, ~, and an empty value into the same nil slice as an
-// omitted key, so only the node tree can tell them apart.
-func hasNullTopLevelKey(data []byte, key string) bool {
-	var doc yaml.Node
-	if err := yaml.Unmarshal(data, &doc); err != nil || len(doc.Content) == 0 {
-		return false
-	}
-	root := doc.Content[0]
-	if root.Kind != yaml.MappingNode {
-		return false
-	}
-	for i := 0; i+1 < len(root.Content); i += 2 {
-		if root.Content[i].Value == key {
-			value := root.Content[i+1]
-			return value.Kind == yaml.ScalarNode && value.ShortTag() == "!!null"
-		}
-	}
-	return false
+	return model.FileConfig{Path: path, Config: config}, nil
 }
 
 func decodeConfig(path string, data []byte) (model.SyncConfig, error) {
