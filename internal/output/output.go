@@ -315,7 +315,11 @@ func printResultDetails(w io.Writer, result *api.Result) error {
 			entries []api.DiffEntry
 		}{{"source", action.bucket.WarehouseMetricSources}, {"metric", action.bucket.Metrics}, {"collection", action.bucket.MetricCollections}} {
 			for _, entry := range objects.entries {
-				if _, err := fmt.Fprintf(w, "  %s %s %s (ID: %s)\n", action.name, objects.name, entry.SyncID, entry.ID); err != nil {
+				label := fmt.Sprintf("  %s %s %s", action.name, objects.name, entry.SyncID)
+				if entry.ID != "" {
+					label += fmt.Sprintf(" (ID: %s)", entry.ID)
+				}
+				if _, err := fmt.Fprintln(w, label); err != nil {
 					return err
 				}
 				if action.name == "Manage with Metric Sync" {
@@ -372,6 +376,9 @@ func printResultDetails(w io.Writer, result *api.Result) error {
 			}
 		}
 	}
+	if err := printCollectionDeletionWarning(w, result); err != nil {
+		return err
+	}
 	for _, warning := range result.Warnings {
 		if _, err := fmt.Fprintf(w, "  Warning: %s\n", warning); err != nil {
 			return err
@@ -397,6 +404,30 @@ func printResultDetails(w io.Writer, result *api.Result) error {
 		return err
 	}
 	return nil
+}
+
+// printCollectionDeletionWarning calls out collections the YAML no longer lists.
+// The server deletes them because the YAML is the desired state, so a file that
+// drops or never sets metric_collections deletes every collection of the tag.
+func printCollectionDeletionWarning(w io.Writer, result *api.Result) error {
+	deleted := result.Deleted.MetricCollections
+	if len(deleted) == 0 {
+		return nil
+	}
+	ids := make([]string, 0, len(deleted))
+	for _, entry := range deleted {
+		ids = append(ids, entry.SyncID)
+	}
+	verb := "deletes"
+	if result.Plan {
+		verb = "would delete"
+	}
+	if _, err := fmt.Fprintf(w, "  %s this %s %s %d metric collection(s) that no file lists under metric_collections: %s\n",
+		colorYellow("Warning:"), operationName(result), verb, len(deleted), strings.Join(ids, ", ")); err != nil {
+		return err
+	}
+	_, err := fmt.Fprintln(w, "    Deletion is permanent; re-adding a collection later creates a new collection with a new ID. If no file sets metric_collections, every collection managed by the sync tag is deleted.")
+	return err
 }
 
 func nonEmpty(values ...string) []string {
