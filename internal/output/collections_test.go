@@ -95,3 +95,19 @@ func TestPrintResultCollectionErrors(t *testing.T) {
 		assertContains(t, got, want)
 	}
 }
+
+func TestPrintResultCollectionMembersAsSyncTagAndSyncID(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+	result := api.Result{Status: "planned", Plan: true, Updated: api.DiffBucket{MetricCollections: []api.DiffEntry{{
+		SyncID: "core", ID: "c-1",
+		Changes: membersChange(
+			`[{"sync_tag":"checkout","sync_id":"a"},{"sync_tag":"growth","sync_id":"b"}]`,
+			`[{"sync_tag":"growth","sync_id":"b"},{"metric_sync_tag":"checkout","metric_sync_id":"a"}]`,
+		),
+	}}}}
+	var out bytes.Buffer
+	if err := PrintResult(&out, &result); err != nil {
+		t.Fatal(err)
+	}
+	assertContains(t, out.String(), "      before: [checkout/a, growth/b]\n      after: [growth/b, checkout/a]\n      order changed\n")
+}

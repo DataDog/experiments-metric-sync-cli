@@ -409,13 +409,28 @@ func nonEmpty(values ...string) []string {
 	return result
 }
 
+// collectionMember accepts both the request key names and the result's
+// (sync_tag, sync_id) pair.
 type collectionMember struct {
 	MetricSyncTag *string `json:"metric_sync_tag"`
 	MetricSyncID  *string `json:"metric_sync_id"`
+	SyncTag       *string `json:"sync_tag"`
+	SyncID        *string `json:"sync_id"`
+}
+
+func (m collectionMember) label() (string, bool) {
+	switch {
+	case m.MetricSyncTag != nil && m.MetricSyncID != nil:
+		return *m.MetricSyncTag + "/" + *m.MetricSyncID, true
+	case m.SyncTag != nil && m.SyncID != nil:
+		return *m.SyncTag + "/" + *m.SyncID, true
+	default:
+		return "", false
+	}
 }
 
 // decodeMembers reads an ordered member list; null means no members. It fails
-// when an entry does not carry both member keys, so callers can fall back to raw JSON.
+// when an entry lacks a complete tag and id pair, so callers can fall back to raw JSON.
 func decodeMembers(raw json.RawMessage) ([]string, bool) {
 	if len(raw) == 0 {
 		return nil, false
@@ -426,10 +441,11 @@ func decodeMembers(raw json.RawMessage) ([]string, bool) {
 	}
 	result := make([]string, 0, len(members))
 	for _, member := range members {
-		if member.MetricSyncTag == nil || member.MetricSyncID == nil {
+		label, ok := member.label()
+		if !ok {
 			return nil, false
 		}
-		result = append(result, *member.MetricSyncTag+"/"+*member.MetricSyncID)
+		result = append(result, label)
 	}
 	return result, true
 }
