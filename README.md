@@ -108,6 +108,77 @@ Omitting `upgrade_by_name` or setting it to `false` leaves that object opted out
 of name-based adoption. Run `plan` and review upgrades and definition changes
 before `execute`, since adoption can update the existing object to match the YAML.
 
+### Metric collections
+
+Metric collections group metrics, in order, and are synced from the same YAML
+as the metrics they contain. See `examples/collections.yaml`.
+
+```yaml
+metric_collections:
+  - sync_id: checkout_core
+    name: Checkout core
+    description: Core checkout KPIs
+    is_guardrail: false
+    metrics:
+      - metric_sync_id: checkout_revenue
+      - metric_sync_tag: growth
+        metric_sync_id: signups
+```
+
+- A collection is identified by its `sync_id` within the sync tag. Members are
+  ordered; reordering them is a change.
+- A member without `metric_sync_tag` refers to a metric under the file's
+  `sync_tag`, and that metric must be defined in the files of the same
+  operation. Set `metric_sync_tag` to reference a metric synced by another tag.
+- Members must be metrics synced by Metric Sync. A member `existing_id` is
+  rejected: adopt a UI metric first (see above), then reference it by
+  `metric_sync_id`.
+- Names must contain 3 to 40 characters after trimming whitespace. Collection
+  `sync_id`s and names must be unique across the files of one operation. A
+  collection holds at most 100 metrics, and a metric can appear only once in a
+  collection.
+- With multiple files, the `metric_collections` entries of all files are
+  combined. A file that omits the key or sets `[]` contributes nothing and does
+  not remove another file's collections.
+
+The combined list is the complete desired set of collections for the sync tag.
+If no file lists any collection (the key is omitted or `[]` everywhere), every
+collection managed by that sync tag is deleted. Deletion is permanent:
+re-adding the YAML later creates a new collection with a new ID. Run `plan` and
+review every `Delete collection` line before `execute`. An explicit
+`metric_collections: null` is rejected so a stray null cannot read as intent.
+
+#### Adopting collections
+
+Adoption works like it does for metrics, and is shallow: the collection keeps
+its ID, but its member metrics are not adopted. Every member must still be a
+synced metric. See `examples/collections-adoption.yaml` for name-based
+adoption. To adopt by ID:
+
+```yaml
+options:
+  upgrade_mode: by_id
+metric_collections:
+  - sync_id: checkout_core
+    existing_id: 00000000-0000-0000-0000-000000000000
+    name: Checkout core
+    metrics:
+      - metric_sync_id: checkout_revenue
+```
+
+#### Cross-tag members
+
+A member under another tag must already be synced by that tag; sync the other
+tag first. While a collection references a metric, that metric cannot be
+deleted, released, or reset by its own tag; the result reports the metric, the
+referencing collection and its tag. To remove such a metric:
+
+1. Remove the member from the collection that references it.
+2. Sync the collection's tag.
+3. Delete, release, or reset the metric with its own tag.
+
+Metric collections need server support on your Datadog site.
+
 ### Properties and filters
 
 Source properties use `property_name`, `property_column`, and `property_type`
