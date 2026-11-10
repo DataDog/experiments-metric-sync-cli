@@ -934,7 +934,7 @@
         },
         "object_type": {
           "type": "string",
-          "enum": ["sync", "warehouse_metric_source", "measure", "property", "metric"]
+          "enum": ["sync", "warehouse_metric_source", "measure", "property", "metric", "metric_collection"]
         },
         "sync_id": {
           "type": ["string", "null"]

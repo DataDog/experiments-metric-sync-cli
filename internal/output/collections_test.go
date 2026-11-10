@@ -55,10 +55,58 @@ func TestPrintResultCollectionDiffs(t *testing.T) {
 		"Member metrics are not adopted",
 		"Delete collection gone (ID: c-5)",
 		"Delete collection also_gone (ID: c-6)",
+		"Warning: this plan would delete 2 metric collection(s) that no file lists under metric_collections: gone, also_gone\n",
+		"If no file sets metric_collections, every collection managed by the sync tag is deleted.",
 	} {
 		assertContains(t, got, want)
 	}
-	if strings.Contains(got, "No changes") || strings.Contains(got, "Warning") {
+	if strings.Contains(got, "No changes") {
+		t.Fatal(got)
+	}
+}
+
+func TestPrintResultNoCollectionDeletionWarning(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+	result := api.Result{
+		Status:  "success",
+		Deleted: api.DiffBucket{Metrics: []api.DiffEntry{{SyncID: "old_metric", ID: "m-1"}}},
+	}
+	var out bytes.Buffer
+	if err := PrintResult(&out, &result); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(out.String(), "Warning") {
+		t.Fatal(out.String())
+	}
+}
+
+func TestPrintResultCollectionDeletionWarningOnExecute(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+	result := api.Result{
+		Status:  "success",
+		Deleted: api.DiffBucket{MetricCollections: []api.DiffEntry{{SyncID: "gone", ID: "c-5"}}},
+	}
+	var out bytes.Buffer
+	if err := PrintResult(&out, &result); err != nil {
+		t.Fatal(err)
+	}
+	assertContains(t, out.String(), "Warning: this execute deletes 1 metric collection(s) that no file lists under metric_collections: gone\n")
+}
+
+func TestPrintResultOmitsEmptyID(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+	result := api.Result{
+		Status:  "planned",
+		Plan:    true,
+		Blocked: api.DiffBucket{MetricCollections: []api.DiffEntry{{SyncID: "adopt_me", Reason: "managed by sync tag growth"}}},
+	}
+	var out bytes.Buffer
+	if err := PrintResult(&out, &result); err != nil {
+		t.Fatal(err)
+	}
+	got := out.String()
+	assertContains(t, got, "  Blocked collection adopt_me\n")
+	if strings.Contains(got, "(ID: )") {
 		t.Fatal(got)
 	}
 }
