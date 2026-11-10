@@ -145,8 +145,12 @@ The combined list is the complete desired set of collections for the sync tag.
 If no file lists any collection (the key is omitted or `[]` everywhere), every
 collection managed by that sync tag is deleted. Deletion is permanent:
 re-adding the YAML later creates a new collection with a new ID. Run `plan` and
-review every `Delete collection` line before `execute`. An explicit
-`metric_collections: null` is rejected so a stray null cannot read as intent.
+review every `Delete collection` line before `execute`; the output also ends
+with a warning that lists every collection the operation deletes. An explicit
+`metric_collections: null` is rejected so a stray null cannot read as intent,
+and so is an empty list item (for example an entry whose fields are all
+commented out) in `metric_collections`, a collection's `metrics`, `metrics`, or
+`warehouse_metric_sources`.
 
 #### Adopting collections
 
