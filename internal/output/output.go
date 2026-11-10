@@ -409,28 +409,29 @@ func nonEmpty(values ...string) []string {
 	return result
 }
 
-// collectionMember accepts both the request key names and the result's
-// (sync_tag, sync_id) pair.
+// collectionMember is one entry of a collection's member list in a result. The
+// server names a sync-managed member by its tag and sync id, and any other member
+// (for example in a collection being adopted) by its metric id.
 type collectionMember struct {
 	MetricSyncTag *string `json:"metric_sync_tag"`
 	MetricSyncID  *string `json:"metric_sync_id"`
-	SyncTag       *string `json:"sync_tag"`
-	SyncID        *string `json:"sync_id"`
+	MetricID      *string `json:"metric_id"`
 }
 
 func (m collectionMember) label() (string, bool) {
 	switch {
 	case m.MetricSyncTag != nil && m.MetricSyncID != nil:
 		return *m.MetricSyncTag + "/" + *m.MetricSyncID, true
-	case m.SyncTag != nil && m.SyncID != nil:
-		return *m.SyncTag + "/" + *m.SyncID, true
+	case m.MetricID != nil:
+		return "unmanaged metric " + *m.MetricID, true
 	default:
 		return "", false
 	}
 }
 
 // decodeMembers reads an ordered member list; null means no members. It fails
-// when an entry lacks a complete tag and id pair, so callers can fall back to raw JSON.
+// when an entry has neither a complete tag and id pair nor a metric id, so callers
+// can fall back to raw JSON.
 func decodeMembers(raw json.RawMessage) ([]string, bool) {
 	if len(raw) == 0 {
 		return nil, false
