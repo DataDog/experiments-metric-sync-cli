@@ -32,6 +32,13 @@
       "items": {
         "$ref": "#/$defs/metric"
       }
+    },
+    "metric_collections": {
+      "type": "array",
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/metric_collection"
+      }
     }
   },
   "$defs": {
@@ -785,10 +792,66 @@
         }
       }
     },
+    "metric_collection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sync_id", "name"],
+      "properties": {
+        "sync_id": {
+          "$ref": "#/$defs/sync_id"
+        },
+        "existing_id": {
+          "$ref": "#/$defs/uuid"
+        },
+        "upgrade_by_name": {
+          "type": "boolean",
+          "default": false
+        },
+        "name": {
+          "$ref": "#/$defs/collection_name"
+        },
+        "description": {
+          "$ref": "#/$defs/description"
+        },
+        "is_guardrail": {
+          "type": "boolean",
+          "default": false
+        },
+        "metrics": {
+          "type": "array",
+          "default": [],
+          "maxItems": 100,
+          "items": {
+            "$ref": "#/$defs/metric_collection_member"
+          }
+        }
+      }
+    },
+    "metric_collection_member": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["metric_sync_id"],
+      "properties": {
+        "metric_sync_tag": {
+          "$ref": "#/$defs/sync_tag"
+        },
+        "metric_sync_id": {
+          "$ref": "#/$defs/sync_id"
+        },
+        "existing_id": {
+          "$ref": "#/$defs/uuid"
+        }
+      }
+    },
+    "collection_name": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 40
+    },
     "diff_bucket": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["warehouse_metric_sources", "metrics"],
+      "required": ["warehouse_metric_sources", "metrics", "metric_collections"],
       "properties": {
         "warehouse_metric_sources": {
           "type": "array",
@@ -797,6 +860,12 @@
           }
         },
         "metrics": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/diff_entry"
+          }
+        },
+        "metric_collections": {
           "type": "array",
           "items": {
             "$ref": "#/$defs/diff_entry"

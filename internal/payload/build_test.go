@@ -190,3 +190,61 @@ func TestBuildSerializesCanonicalRatioAggregationKeys(t *testing.T) {
 		t.Fatalf("serialized ratio contains legacy denominator key: %s", body)
 	}
 }
+
+func TestBuildConcatenatesMetricCollections(t *testing.T) {
+	config := func(collections []model.MetricCollection) model.SyncConfig {
+		return model.SyncConfig{SchemaVersion: 1, SyncTag: "checkout", MetricCollections: collections}
+	}
+	files := []model.FileConfig{
+		{Path: "a.yaml", Config: config([]model.MetricCollection{{SyncID: "a", Name: "Alpha"}})},
+		{Path: "empty.yaml", Config: config([]model.MetricCollection{})},
+		{Path: "omitted.yaml", Config: config(nil)},
+		{Path: "b.yaml", Config: config([]model.MetricCollection{{SyncID: "b", Name: "Beta", Metrics: []model.MetricCollectionMember{{MetricSyncID: "m"}}}})},
+	}
+	result, _, err := Build(files)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.MetricCollections) != 2 || result.MetricCollections[0].SyncID != "a" || result.MetricCollections[1].SyncID != "b" {
+		t.Fatalf("unexpected collections: %+v", result.MetricCollections)
+	}
+	raw, err := json.Marshal(result)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var body struct {
+		MetricCollections []map[string]json.RawMessage `json:"metric_collections"`
+	}
+	if err := json.Unmarshal(raw, &body); err != nil {
+		t.Fatal(err)
+	}
+	first := body.MetricCollections[0]
+	if string(first["metrics"]) != "[]" || string(first["is_guardrail"]) != "false" {
+		t.Fatalf("expected metrics [] and is_guardrail false, got %s", raw)
+	}
+	if _, ok := first["existing_id"]; ok {
+		t.Fatalf("expected no existing_id, got %s", raw)
+	}
+}
+
+func TestBuildOmitsEmptyMetricCollections(t *testing.T) {
+	files := []model.FileConfig{
+		{Path: "a.yaml", Config: model.SyncConfig{SchemaVersion: 1, SyncTag: "checkout", MetricCollections: []model.MetricCollection{}}},
+		{Path: "b.yaml", Config: model.SyncConfig{SchemaVersion: 1, SyncTag: "checkout", Metrics: []model.Metric{{SyncID: "m"}}}},
+	}
+	result, _, err := Build(files)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, err := json.Marshal(result)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var body map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &body); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := body["metric_collections"]; ok {
+		t.Fatalf("expected metric_collections to be omitted, got %s", raw)
+	}
+}

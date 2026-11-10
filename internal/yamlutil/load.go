@@ -17,23 +17,58 @@ import (
 func LoadFiles(paths []string) ([]model.FileConfig, error) {
 	files := make([]model.FileConfig, 0, len(paths))
 	for _, path := range paths {
-		config, err := LoadFile(path)
+		file, err := loadFileConfig(path)
 		if err != nil {
 			return nil, err
 		}
-		files = append(files, model.FileConfig{
-			Path:   path,
-			Config: config,
-		})
+		files = append(files, file)
 	}
 	return files, nil
 }
 
 func LoadFile(path string) (model.SyncConfig, error) {
+	file, err := loadFileConfig(path)
+	return file.Config, err
+}
+
+func loadFileConfig(path string) (model.FileConfig, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return model.SyncConfig{}, fmt.Errorf("read %s: %w", path, err)
+		return model.FileConfig{}, fmt.Errorf("read %s: %w", path, err)
 	}
+	config, err := decodeConfig(path, data)
+	if err != nil {
+		return model.FileConfig{}, err
+	}
+	return model.FileConfig{
+		Path:                  path,
+		Config:                config,
+		MetricCollectionsNull: hasNullTopLevelKey(data, "metric_collections"),
+	}, nil
+}
+
+// hasNullTopLevelKey reports whether the document sets key to an explicit null.
+// The typed decode turns null, ~, and an empty value into the same nil slice as an
+// omitted key, so only the node tree can tell them apart.
+func hasNullTopLevelKey(data []byte, key string) bool {
+	var doc yaml.Node
+	if err := yaml.Unmarshal(data, &doc); err != nil || len(doc.Content) == 0 {
+		return false
+	}
+	root := doc.Content[0]
+	if root.Kind != yaml.MappingNode {
+		return false
+	}
+	for i := 0; i+1 < len(root.Content); i += 2 {
+		if root.Content[i].Value == key {
+			value := root.Content[i+1]
+			return value.Kind == yaml.ScalarNode && value.ShortTag() == "!!null"
+		}
+	}
+	return false
+}
+
+func decodeConfig(path string, data []byte) (model.SyncConfig, error) {
 
 	decoder := yaml.NewDecoder(bytes.NewReader(data))
 	decoder.KnownFields(true)

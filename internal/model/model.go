@@ -40,6 +40,10 @@ type SyncConfig struct {
 	WarehouseConnectionID  string                  `json:"warehouse_connection_id,omitempty" yaml:"warehouse_connection_id,omitempty"`
 	WarehouseMetricSources []WarehouseMetricSource `json:"warehouse_metric_sources,omitempty" yaml:"warehouse_metric_sources,omitempty"`
 	Metrics                []Metric                `json:"metrics,omitempty" yaml:"metrics,omitempty"`
+	// MetricCollections is the complete desired set of collections for the sync tag.
+	// Nil and empty both serialize as an omitted key, which the server treats as
+	// "no desired collections".
+	MetricCollections []MetricCollection `json:"metric_collections,omitempty" yaml:"metric_collections,omitempty"`
 	Options                Options                 `json:"-" yaml:"options,omitempty"`
 }
 
@@ -156,7 +160,27 @@ type PropertyRef struct {
 	WarehouseMetricPropertyID    string `json:"warehouse_metric_property_id,omitempty" yaml:"warehouse_metric_property_id,omitempty"`
 }
 
+type MetricCollection struct {
+	SyncID        string                   `json:"sync_id" yaml:"sync_id"`
+	ExistingID    string                   `json:"existing_id,omitempty" yaml:"existing_id,omitempty"`
+	UpgradeByName bool                     `json:"upgrade_by_name,omitempty" yaml:"upgrade_by_name,omitempty"`
+	Name          string                   `json:"name" yaml:"name"`
+	Description   string                   `json:"description,omitempty" yaml:"description,omitempty"`
+	IsGuardrail   bool                     `json:"is_guardrail" yaml:"is_guardrail,omitempty"`
+	Metrics       []MetricCollectionMember `json:"metrics" yaml:"metrics,omitempty"`
+}
+
+type MetricCollectionMember struct {
+	MetricSyncTag string `json:"metric_sync_tag,omitempty" yaml:"metric_sync_tag,omitempty"`
+	MetricSyncID  string `json:"metric_sync_id" yaml:"metric_sync_id"`
+	// ExistingID is parsed only so validation can explain that members must be synced metrics.
+	ExistingID string `json:"existing_id,omitempty" yaml:"existing_id,omitempty"`
+}
+
 type FileConfig struct {
 	Path   string
 	Config SyncConfig
+	// MetricCollectionsNull records an explicit YAML null for metric_collections,
+	// which decodes to the same nil slice as an omitted key.
+	MetricCollectionsNull bool
 }

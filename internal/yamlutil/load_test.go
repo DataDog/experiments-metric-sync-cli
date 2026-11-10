@@ -277,3 +277,69 @@ metrics:
 		})
 	}
 }
+
+func TestLoadFilesMetricCollectionsNullDetection(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		body     string
+		wantNull bool
+		wantNil  bool
+	}{
+		{name: "null", body: "metric_collections: null\n", wantNull: true, wantNil: true},
+		{name: "tilde", body: "metric_collections: ~\n", wantNull: true, wantNil: true},
+		{name: "empty value", body: "metric_collections:\n", wantNull: true, wantNil: true},
+		{name: "empty list", body: "metric_collections: []\n", wantNull: false, wantNil: false},
+		{name: "omitted", body: "", wantNull: false, wantNil: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			path := writeYAML(t, "schema_version: 1\nsync_tag: checkout\n"+tc.body)
+			files, err := LoadFiles([]string{path})
+			if err != nil {
+				t.Fatal(err)
+			}
+			file := files[0]
+			if file.MetricCollectionsNull != tc.wantNull {
+				t.Fatalf("MetricCollectionsNull = %v, want %v", file.MetricCollectionsNull, tc.wantNull)
+			}
+			if (file.Config.MetricCollections == nil) != tc.wantNil {
+				t.Fatalf("MetricCollections nil = %v, want %v", file.Config.MetricCollections == nil, tc.wantNil)
+			}
+		})
+	}
+}
+
+func TestLoadFileMetricCollections(t *testing.T) {
+	path := writeYAML(t, `
+schema_version: 1
+sync_tag: checkout
+metric_collections:
+  - sync_id: checkout_core
+    name: Checkout core
+    is_guardrail: true
+    metrics:
+      - metric_sync_id: checkout_revenue
+      - metric_sync_tag: growth
+        metric_sync_id: signups
+`)
+	config, err := LoadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	collection := config.MetricCollections[0]
+	if collection.SyncID != "checkout_core" || !collection.IsGuardrail || len(collection.Metrics) != 2 ||
+		collection.Metrics[1].MetricSyncTag != "growth" || collection.Metrics[1].MetricSyncID != "signups" {
+		t.Fatalf("unexpected collection: %+v", collection)
+	}
+
+	unknown := writeYAML(t, `
+schema_version: 1
+sync_tag: checkout
+metric_collections:
+  - sync_id: checkout_core
+    name: Checkout core
+    owner: me
+`)
+	if _, err := LoadFile(unknown); err == nil || !strings.Contains(err.Error(), "owner") {
+		t.Fatalf("expected unknown collection field to be rejected, got %v", err)
+	}
+}
