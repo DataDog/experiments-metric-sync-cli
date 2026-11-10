@@ -34,8 +34,9 @@
       }
     },
     "metric_collections": {
-      "type": "array",
+      "type": ["array", "null"],
       "default": [],
+      "description": "The complete set of metric collections this sync tag manages in the org. Omitting the field, sending an empty array, and sending null are equivalent: each means no collections, so every collection the sync tag manages in the org is permanently deleted. Restoring a collection later creates a new collection ID.",
       "items": {
         "$ref": "#/$defs/metric_collection"
       }
