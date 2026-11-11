@@ -86,6 +86,8 @@ func PrintResult(w io.Writer, result *api.Result) error {
 	summaryTitle := "Summary"
 	if result.Plan {
 		summaryTitle = "Proposed changes"
+	} else if notApplied(result) {
+		summaryTitle = "Proposed changes (not applied; the operation failed)"
 	} else if result.Status != "success" && result.Status != "skipped" {
 		summaryTitle = "Proposed changes (completion is not confirmed)"
 	}
@@ -400,10 +402,21 @@ func printResultDetails(w io.Writer, result *api.Result) error {
 		}
 	}
 	if api.IsFailureStatus(result.Status) && len(result.Errors) == 0 {
+		if blocked := api.CountBucket(result.Blocked); blocked > 0 {
+			_, err := fmt.Fprintf(w, "  Operation %s failed: %d blocked change(s), listed above.\n", result.MetricSyncID, blocked)
+			return err
+		}
 		_, err := fmt.Fprintf(w, "  Operation %s failed. The server returned no error details.\n", result.MetricSyncID)
 		return err
 	}
 	return nil
+}
+
+// notApplied reports whether an execute result wrote nothing. The server applies a
+// sync in one transaction, so a failure, a blocked change, or an error rolls back
+// every change the result lists.
+func notApplied(result *api.Result) bool {
+	return !result.Plan && (api.IsFailureStatus(result.Status) || api.CountBucket(result.Blocked) > 0 || len(result.Errors) > 0)
 }
 
 // printCollectionDeletionWarning calls out collections the YAML no longer lists.
@@ -417,6 +430,14 @@ func printCollectionDeletionWarning(w io.Writer, result *api.Result) error {
 	ids := make([]string, 0, len(deleted))
 	for _, entry := range deleted {
 		ids = append(ids, entry.SyncID)
+	}
+	if notApplied(result) {
+		if _, err := fmt.Fprintf(w, "  %s this execute did not delete %d metric collection(s) that no file lists under metric_collections, because the operation failed and nothing was applied: %s\n",
+			colorYellow("Warning:"), len(deleted), strings.Join(ids, ", ")); err != nil {
+			return err
+		}
+		_, err := fmt.Fprintln(w, "    A later execute that succeeds with these files deletes them. Deletion is permanent; re-adding a collection later creates a new collection with a new ID. If no file sets metric_collections, every collection managed by the sync tag is deleted.")
+		return err
 	}
 	verb := "deletes"
 	if result.Plan {

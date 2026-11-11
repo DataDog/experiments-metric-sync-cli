@@ -93,6 +93,33 @@ func TestPrintResultCollectionDeletionWarningOnExecute(t *testing.T) {
 	assertContains(t, out.String(), "Warning: this execute deletes 1 metric collection(s) that no file lists under metric_collections: gone\n")
 }
 
+func TestPrintResultFailedExecuteDidNotDeleteCollections(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+	result := api.Result{
+		MetricSyncID: "failed-id",
+		Status:       "failed",
+		Deleted:      api.DiffBucket{MetricCollections: []api.DiffEntry{{SyncID: "checkout_core", ID: "c-1"}}},
+		Errors:       []api.Issue{{ObjectType: "metric_collection", Message: "metric collections are not enabled"}},
+	}
+	var out bytes.Buffer
+	if err := PrintResult(&out, &result); err != nil {
+		t.Fatal(err)
+	}
+	got := out.String()
+	for _, want := range []string{
+		"Proposed changes (not applied; the operation failed)",
+		"Delete collection checkout_core (ID: c-1)",
+		"Warning: this execute did not delete 1 metric collection(s) that no file lists under metric_collections, because the operation failed and nothing was applied: checkout_core\n",
+		"A later execute that succeeds with these files deletes them.",
+		"Error: metric_collection: metric collections are not enabled",
+	} {
+		assertContains(t, got, want)
+	}
+	if strings.Contains(got, "this execute deletes") || strings.Contains(got, "no error details") {
+		t.Fatal(got)
+	}
+}
+
 func TestPrintResultOmitsEmptyID(t *testing.T) {
 	t.Setenv("NO_COLOR", "1")
 	result := api.Result{
