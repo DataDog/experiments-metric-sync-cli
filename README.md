@@ -108,6 +108,131 @@ Omitting `upgrade_by_name` or setting it to `false` leaves that object opted out
 of name-based adoption. Run `plan` and review upgrades and definition changes
 before `execute`, since adoption can update the existing object to match the YAML.
 
+### Metric collections
+
+Metric collections group metrics, in order, and are synced from the same YAML
+as the metrics they contain. See `examples/collections.yaml`.
+
+```yaml
+metric_collections:
+  - sync_id: checkout_core
+    name: Checkout core
+    description: Core checkout KPIs
+    is_guardrail: false
+    metrics:
+      - metric_sync_id: checkout_revenue
+      - metric_sync_tag: growth
+        metric_sync_id: signups
+```
+
+- A collection is identified by its `sync_id` within the sync tag. Members are
+  ordered; reordering them is a change.
+- A member without `metric_sync_tag` refers to a metric under the file's
+  `sync_tag`, and that metric must be defined in the files of the same
+  operation. Set `metric_sync_tag` to reference a metric synced by another tag.
+- Members must be metrics synced by Metric Sync. A member `existing_id` is
+  rejected: adopt a UI metric first (see above), then reference it by
+  `metric_sync_id`.
+- Names must contain 3 to 40 characters after trimming whitespace. Collection
+  `sync_id`s and names must be unique across the files of one operation. A
+  collection holds at most 100 metrics, and a metric can appear only once in a
+  collection.
+- With multiple files, the `metric_collections` entries of all files are
+  combined. A file that omits the key, or sets it to `[]` or `null`,
+  contributes nothing and does not remove another file's collections.
+
+The combined list is the complete desired set of collections for the sync tag.
+If no file lists any collection (the key is omitted, `[]`, or `null` in every
+file), every collection managed by that sync tag is deleted. Deletion is
+permanent: re-adding the YAML later creates a new collection with a new ID. Run
+`plan` and review every `Delete collection` line before `execute`; the output
+also ends with a warning that lists every collection the operation deletes. An
+empty list item (for example an entry whose fields are all commented out) in
+`metric_collections`, a collection's `metrics`, `metrics`, or
+`warehouse_metric_sources` is rejected, so a stray blank entry cannot delete a
+collection or member.
+
+A synced collection is locked in Datadog: editing or deleting it in the UI or
+through the API returns `409 Conflict` with a message that the collection is
+managed by metric sync and must be changed in source control. Change it in YAML
+and sync again, or release its tag (see
+[Releasing or resetting a sync tag](#releasing-or-resetting-a-sync-tag)) to
+manage it by hand.
+
+#### Adopting collections
+
+Adoption works like it does for metrics, and is shallow: the collection keeps
+its ID, but its member metrics are not adopted. Every member must still be a
+synced metric. See `examples/collections-adoption.yaml` for name-based
+adoption. With `upgrade_by_name: true`, no matching manual collection creates
+one, a single match is adopted, and multiple matches are blocked. Without
+`upgrade_by_name`, a manual collection with the same name blocks the sync
+instead of creating a duplicate.
+
+Name matching is exact, the same rule as metric by-name adoption: the server
+compares the trimmed YAML name against stored names as they are, case-sensitive
+and without trimming the stored name. A collection created in the UI with
+different case or with leading or trailing spaces is not matched: it does not
+block a create, and `upgrade_by_name` does not find it. To adopt such a
+collection, use `existing_id` with `upgrade_mode: by_id`.
+
+A collection synced by another tag cannot be adopted, by `existing_id` or by
+`upgrade_by_name`: the result reports it as blocked and names the tag that
+manages it. Release that tag first (see
+[Releasing or resetting a sync tag](#releasing-or-resetting-a-sync-tag)), or
+move the collection's YAML to the tag that manages it. To adopt by ID:
+
+```yaml
+options:
+  upgrade_mode: by_id
+metric_collections:
+  - sync_id: checkout_core
+    existing_id: 00000000-0000-0000-0000-000000000000
+    name: Checkout core
+    metrics:
+      - metric_sync_id: checkout_revenue
+```
+
+#### Cross-tag members
+
+A member under another tag must already be synced by that tag; sync the other
+tag first. While a collection references a metric, that metric cannot be
+deleted by its own tag, even with `force_delete`, and that tag cannot be
+released or reset; the result reports the metric, the referencing collection
+and its tag. To remove such a metric:
+
+1. Remove the member from the collection that references it.
+2. Sync the collection's tag.
+3. Delete the metric, or release or reset its tag (see
+   [Releasing or resetting a sync tag](#releasing-or-resetting-a-sync-tag)).
+
+Metric collections must be enabled for your Datadog organization. Until they
+are, `plan` previews collection changes, and `execute` fails before writing
+anything when it would create, update, adopt, or delete a collection. That
+includes deleting collections a tag already manages by omitting
+`metric_collections`.
+
+### Releasing or resetting a sync tag
+
+The CLI has no release or reset command. To hand a tag's objects back to manual
+management, call the Metric Sync API directly with the same `DD_API_KEY` and
+`DD_APP_KEY`:
+
+- `POST /api/v2/experiments/metric-syncs/tags/{sync_tag}/release` clears sync
+  ownership from the tag's sources, measures, properties, metrics, and
+  collections. The objects stay active and become manually managed; collections
+  keep their members.
+- `POST /api/v2/experiments/metric-syncs/tags/{sync_tag}/reset?force=true` does
+  the same release and also drops the tag's sync history, so the next sync for
+  the tag starts from a clean lineage.
+
+Released objects are manual objects: to sync them again, adopt them with
+`existing_id` or `upgrade_by_name`. A release or reset is refused while a
+collection under another tag references one of the tag's metrics (see
+[Cross-tag members](#cross-tag-members)). The full contract, unblock steps, and
+rollback runbook are in `dd-source`, in
+`domains/ffe/libs/experimentation/core/metric_sync/schema/schema_v1/README.md`.
+
 ### Properties and filters
 
 Source properties use `property_name`, `property_column`, and `property_type`
@@ -166,7 +291,9 @@ naturally. In local/manual runs, the generated key includes a fresh nonce so
 re-running the same file starts a new operation instead of replaying an old one.
 
 Use `--idempotency-key` only when you intentionally want to replay or debug a
-specific request.
+specific request. Reusing a key with the same request returns the recorded
+result. To apply the same files again after a failed or suspect operation,
+review a fresh `plan`, then run `execute` with a new key.
 
 ## API behavior
 
