@@ -169,6 +169,13 @@ one, a single match is adopted, and multiple matches are blocked. Without
 `upgrade_by_name`, a manual collection with the same name blocks the sync
 instead of creating a duplicate.
 
+Name matching is exact, the same rule as metric by-name adoption: the server
+compares the trimmed YAML name against stored names as they are, case-sensitive
+and without trimming the stored name. A collection created in the UI with
+different case or with leading or trailing spaces is not matched: it does not
+block a create, and `upgrade_by_name` does not find it. To adopt such a
+collection, use `existing_id` with `upgrade_mode: by_id`.
+
 A collection synced by another tag cannot be adopted, by `existing_id` or by
 `upgrade_by_name`: the result reports it as blocked and names the tag that
 manages it. Release that tag first (see
