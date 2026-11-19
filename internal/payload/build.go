@@ -55,6 +55,13 @@ func Build(files []model.FileConfig) (model.SyncConfig, SubmitOptions, error) {
 		}
 		result.WarehouseMetricSources = append(result.WarehouseMetricSources, config.WarehouseMetricSources...)
 		result.Metrics = append(result.Metrics, config.Metrics...)
+		// Each file contributes its collections; an omitted or empty list adds nothing.
+		for _, collection := range config.MetricCollections {
+			if collection.Metrics == nil {
+				collection.Metrics = []model.MetricCollectionMember{}
+			}
+			result.MetricCollections = append(result.MetricCollections, collection)
+		}
 	}
 
 	return result, SubmitOptions{

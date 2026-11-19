@@ -13,3 +13,9 @@ Source commit when initially vendored:
 ```
 
 Until Datadog publishes a public schema artifact, `dd-source` remains the source of truth. Update this file when refreshing the vendored schema so schema drift is detectable.
+
+## Local additions
+
+The `metric_collections` request property, the `metric_collection`, `metric_collection_member`, and `collection_name` definitions, and the `metric_collections` diff bucket mirror the pending `dd-source` metric collection change. They were added here ahead of that change merging; re-vendor the file from `dd-source` once it lands and drop this note.
+
+The `owner_email` metric property mirrors the pending `dd-source` metric owner change (ddoghq/dd-source#190191). It was added here ahead of that change merging; re-vendor the file from `dd-source` once it lands and drop this note.

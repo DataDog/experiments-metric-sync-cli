@@ -258,7 +258,7 @@ func TestPrintResultDetailsAndFailureLabels(t *testing.T) {
 	if err := PrintResult(&out, &result); err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"Proposed changes (completion is not confirmed)", "Update metric metric (ID: metric-id)", `name: "Old" -> "New"`, "Blocked source events", "Reason: active experiment", "Affected experiment: experiment-id", "Warning: server warning", "metrics[0].measure: missing source", "Correction: check the sync tag"} {
+	for _, want := range []string{"Proposed changes (not applied; the operation failed)", "Update metric metric (ID: metric-id)", `name: "Old" -> "New"`, "Blocked source events", "Reason: active experiment", "Affected experiment: experiment-id", "Warning: server warning", "metrics[0].measure: missing source", "Correction: check the sync tag"} {
 		assertContains(t, out.String(), want)
 	}
 	if strings.Contains(out.String(), "already matches") {
@@ -275,6 +275,34 @@ func TestFailedEmptyResultDoesNotClaimSuccess(t *testing.T) {
 	if strings.Contains(out.String(), "No changes") || strings.Contains(out.String(), "already matches") {
 		t.Fatal(out.String())
 	}
+}
+
+func TestBlockedFailurePointsToBlockedEntries(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+	result := api.Result{MetricSyncID: "blocked-id", Status: "failed", Blocked: api.DiffBucket{
+		MetricCollections: []api.DiffEntry{{SyncID: "checkout_core", Reason: "managed by another tag"}},
+		Metrics:           []api.DiffEntry{{SyncID: "revenue", ID: "m-1", Reason: "referenced by a collection"}},
+	}}
+	var out bytes.Buffer
+	if err := PrintResult(&out, &result); err != nil {
+		t.Fatal(err)
+	}
+	got := out.String()
+	assertContains(t, got, "Proposed changes (not applied; the operation failed)")
+	assertContains(t, got, "  Operation blocked-id failed: 2 blocked change(s), listed above.\n")
+	if strings.Contains(got, "no error details") {
+		t.Fatal(got)
+	}
+}
+
+func TestUnconfirmedExecuteKeepsCompletionLabel(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+	result := api.Result{Status: "running", Updated: api.DiffBucket{Metrics: []api.DiffEntry{{SyncID: "metric", ID: "m-1"}}}}
+	var out bytes.Buffer
+	if err := PrintResult(&out, &result); err != nil {
+		t.Fatal(err)
+	}
+	assertContains(t, out.String(), "Proposed changes (completion is not confirmed)")
 }
 
 func TestPlanLabelsChangesAsProposed(t *testing.T) {

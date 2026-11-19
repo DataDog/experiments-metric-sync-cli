@@ -48,6 +48,7 @@ type WarehouseConnection struct {
 type DiffBucket struct {
 	WarehouseMetricSources []DiffEntry `json:"warehouse_metric_sources"`
 	Metrics                []DiffEntry `json:"metrics"`
+	MetricCollections      []DiffEntry `json:"metric_collections"`
 }
 
 type DiffEntry struct {
@@ -141,5 +142,5 @@ func IsFailureStatus(status string) bool {
 }
 
 func CountBucket(bucket DiffBucket) int {
-	return len(bucket.WarehouseMetricSources) + len(bucket.Metrics)
+	return len(bucket.WarehouseMetricSources) + len(bucket.Metrics) + len(bucket.MetricCollections)
 }
