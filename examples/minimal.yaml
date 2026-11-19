@@ -22,6 +22,9 @@ warehouse_metric_sources:
 metrics:
   - sync_id: checkout_revenue
     name: Checkout revenue
+    # Optional: shown as the metric's creator. Must be an active member of the
+    # org being synced; omitting it clears the owner.
+    # owner_email: jane.doe@example.com
     metric_type: simple
     desired_change: METRIC_INCREASES
     simple_metric_aggregation:

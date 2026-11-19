@@ -95,6 +95,7 @@ type Metric struct {
 	UpgradeByName               bool                         `json:"upgrade_by_name,omitempty" yaml:"upgrade_by_name,omitempty"`
 	Name                        string                       `json:"name" yaml:"name"`
 	Description                 string                       `json:"description,omitempty" yaml:"description,omitempty"`
+	OwnerEmail                  string                       `json:"owner_email,omitempty" yaml:"owner_email,omitempty"`
 	MetricType                  string                       `json:"metric_type" yaml:"metric_type"`
 	FormatAsPercent             bool                         `json:"format_as_percent,omitempty" yaml:"format_as_percent,omitempty"`
 	ReferenceURL                string                       `json:"reference_url,omitempty" yaml:"reference_url,omitempty"`

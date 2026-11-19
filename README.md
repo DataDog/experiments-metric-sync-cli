@@ -108,6 +108,27 @@ Omitting `upgrade_by_name` or setting it to `false` leaves that object opted out
 of name-based adoption. Run `plan` and review upgrades and definition changes
 before `execute`, since adoption can update the existing object to match the YAML.
 
+### Metric owners
+
+Set `owner_email` on a metric to name the person who owns it:
+
+```yaml
+metrics:
+  - sync_id: checkout_revenue
+    name: Checkout revenue
+    owner_email: jane.doe@example.com
+    # Include the remaining metric fields.
+```
+
+The owner shows in the metric's Creator column in Datadog in place of the Metric
+Sync label. The email must belong to an active member of the Datadog org being
+synced. Omitting `owner_email` clears the owner.
+
+`validate`, `plan`, and `execute` check locally that the value is a plain
+address such as `jane.doe@example.com`, ignoring case and surrounding spaces.
+Display names (`Jane <jane@example.com>`), comments, and spaces inside the
+address are rejected. Datadog checks org membership when it processes the sync.
+
 ### Properties and filters
 
 Source properties use `property_name`, `property_column`, and `property_type`

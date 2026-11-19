@@ -190,3 +190,39 @@ func TestBuildSerializesCanonicalRatioAggregationKeys(t *testing.T) {
 		t.Fatalf("serialized ratio contains legacy denominator key: %s", body)
 	}
 }
+
+func TestBuildSerializesOwnerEmail(t *testing.T) {
+	files := []model.FileConfig{{
+		Path: "owner.yaml",
+		Config: model.SyncConfig{
+			SchemaVersion: 1,
+			SyncTag:       "checkout",
+			Metrics: []model.Metric{
+				{SyncID: "owned", Name: "owned", MetricType: "simple", OwnerEmail: "jane.doe@example.com"},
+				{SyncID: "unowned", Name: "unowned", MetricType: "simple"},
+			},
+		},
+	}}
+
+	got, _, err := Build(files)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, err := json.Marshal(got)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var decoded struct {
+		Metrics []map[string]any `json:"metrics"`
+	}
+	if err := json.Unmarshal(body, &decoded); err != nil {
+		t.Fatal(err)
+	}
+	if decoded.Metrics[0]["owner_email"] != "jane.doe@example.com" {
+		t.Fatalf("serialized metric is missing owner_email: %s", body)
+	}
+	// An omitted owner is sent as an omitted key, which clears the owner.
+	if _, ok := decoded.Metrics[1]["owner_email"]; ok {
+		t.Fatalf("serialized metric without an owner contains owner_email: %s", body)
+	}
+}
