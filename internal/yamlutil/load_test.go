@@ -371,3 +371,28 @@ func TestLoadFileRejectsNullListItems(t *testing.T) {
 		})
 	}
 }
+
+func TestLoadFileAcceptsOwnerEmail(t *testing.T) {
+	path := writeYAML(t, `
+schema_version: 1
+sync_tag: checkout
+metrics:
+  - sync_id: checkout_revenue
+    name: Checkout revenue
+    owner_email: jane.doe@example.com
+    metric_type: simple
+    simple_metric_aggregation:
+      operation: sum
+      measure:
+        warehouse_metric_source_sync_id: src
+        measure_sync_id: m
+`)
+
+	config, err := LoadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := config.Metrics[0].OwnerEmail; got != "jane.doe@example.com" {
+		t.Fatalf("OwnerEmail = %q", got)
+	}
+}

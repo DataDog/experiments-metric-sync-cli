@@ -235,6 +235,10 @@
         "description": {
           "$ref": "#/$defs/description"
         },
+        "owner_email": {
+          "type": ["string", "null"],
+          "description": "Email of the Datadog user shown as the metric's creator. Must belong to an active member of the org. Omitting the field clears the owner."
+        },
         "metric_type": {
           "type": "string",
           "enum": ["simple", "ratio", "percentile"]

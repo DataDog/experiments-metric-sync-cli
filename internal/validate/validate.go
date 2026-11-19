@@ -6,6 +6,7 @@ package validate
 
 import (
 	"fmt"
+	"net/mail"
 	"regexp"
 	"strings"
 	"unicode/utf8"
@@ -165,6 +166,10 @@ func validateMetric(add func(string, string), path string, metric model.Metric) 
 	require(add, path+".metric_type", metric.MetricType)
 	if metric.DesiredChange != "" && !oneOf(metric.DesiredChange, "METRIC_INCREASES", "METRIC_DECREASES") {
 		add(path+".desired_change", "must be METRIC_INCREASES or METRIC_DECREASES")
+	}
+	// The message leaves out the address because validation issues are written to the debug log.
+	if metric.OwnerEmail != "" && !validOwnerEmail(metric.OwnerEmail) {
+		add(path+".owner_email", fmt.Sprintf("metric %q: must be a plain email address such as jane@example.com, without a display name or comment", metric.SyncID))
 	}
 	switch metric.MetricType {
 	case "simple":
@@ -551,6 +556,14 @@ func requireSyncID(add func(string, string), path string, value string) {
 	if value != "" && !syncIDPattern.MatchString(value) {
 		add(path, "must start with an alphanumeric character and contain only alphanumeric, underscore, dot, colon, or dash characters")
 	}
+}
+
+// validOwnerEmail must match the server's check exactly: net/mail must parse the
+// trimmed, lowercased address back to itself.
+func validOwnerEmail(value string) bool {
+	normalized := strings.ToLower(strings.TrimSpace(value))
+	address, err := mail.ParseAddress(normalized)
+	return err == nil && address.Address == normalized
 }
 
 func oneOf(value string, allowed ...string) bool {

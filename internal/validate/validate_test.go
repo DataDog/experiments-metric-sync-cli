@@ -573,3 +573,62 @@ func measureRefConfig(ref model.MeasureRef, operation string) model.SyncConfig {
 	config.WarehouseMetricSources[0].SubjectTypes = []model.SourceSubjectType{{Name: "Customer", ColumnName: "customer_id"}}
 	return config
 }
+
+func TestValidateOwnerEmail(t *testing.T) {
+	for _, tc := range []struct {
+		email string
+		valid bool
+	}{
+		{email: "", valid: true},
+		{email: "jane+metrics@acme.com", valid: true},
+		{email: "jane@eu.acme.co.uk", valid: true},
+		{email: "jane@acme.engineering", valid: true},
+		{email: "o'brien-smith@acme.com", valid: true},
+		{email: "jane_doe@acme.com", valid: true},
+		{email: "Jane.Doe@ACME.com", valid: true},
+		{email: "josé@acme.com", valid: true},
+		{email: "jane@bücher.de", valid: true},
+		{email: " Jane.Doe@ACME.com ", valid: true},
+		{email: "   ", valid: false},
+		{email: "jane.doe@", valid: false},
+		{email: "@acme.com", valid: false},
+		{email: "jane doe@acme.com", valid: false},
+		{email: "jane@@acme.com", valid: false},
+		{email: "jane..doe@acme.com", valid: false},
+		{email: "Jane <jane@acme.com>", valid: false},
+		{email: "jane@acme.com (Jane)", valid: false},
+	} {
+		t.Run(tc.email, func(t *testing.T) {
+			issues := ValidateFiles([]model.FileConfig{{
+				Path: "owner.yaml",
+				Config: thresholdConfig(model.Metric{
+					SyncID:     "checkout_revenue",
+					Name:       "Checkout revenue",
+					MetricType: "simple",
+					OwnerEmail: tc.email,
+					SimpleMetricAggregation: &model.SimpleMetricAggregation{
+						Operation: "sum",
+						Measure:   model.MeasureRef{MeasureSyncID: "m", WarehouseMetricSourceSyncID: "src"},
+					},
+				}),
+			}})
+			if tc.valid {
+				if len(issues) != 0 {
+					t.Fatalf("expected no issues, got %v", issues)
+				}
+				return
+			}
+			if len(issues) != 1 {
+				t.Fatalf("expected one issue, got %v", issues)
+			}
+			issue := issues[0]
+			if issue.Path != "metrics[0].owner_email" || !strings.Contains(issue.Message, `"checkout_revenue"`) {
+				t.Fatalf("unexpected issue: %v", issue)
+			}
+			// Issues are written to the debug log, which must not hold the address.
+			if trimmed := strings.TrimSpace(tc.email); trimmed != "" && strings.Contains(issue.Error(), trimmed) {
+				t.Fatalf("issue repeats the email address: %v", issue)
+			}
+		})
+	}
+}
