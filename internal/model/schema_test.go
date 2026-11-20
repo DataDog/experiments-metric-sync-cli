@@ -72,6 +72,7 @@ func TestModelMatchesSchema(t *testing.T) {
 		{def: "measure_ref", typ: MeasureRef{}, cliOnly: []string{"warehouse_metric_measure_id"}},
 		{def: "property_ref", typ: PropertyRef{}, cliOnly: []string{"warehouse_metric_property_id"}},
 		{def: "property_filter", typ: PropertyFilter{}},
+		{def: "property_breakout", typ: PropertyBreakout{}},
 	} {
 		name := reflect.TypeOf(tc.typ).Name()
 		t.Run(name+"/"+tc.def, func(t *testing.T) {
