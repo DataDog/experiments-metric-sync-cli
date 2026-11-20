@@ -359,6 +359,7 @@ func validateCombined(files []model.FileConfig) []Issue {
 }
 
 func validateMetricRefs(add func(string, string), path string, metric model.Metric, syncTag string, sourcesByID map[string]model.WarehouseMetricSource) {
+	validatePropertyBreakouts(add, path+".property_breakouts", metric, syncTag, sourcesByID)
 	validateAgg := func(path string, agg model.SimpleMetricAggregation) {
 		validateFilters(add, path+".property_filters", agg.PropertyFilters, agg.Measure, true, syncTag, sourcesByID)
 		if validateMeasureRef(add, path+".measure", agg.Measure, syncTag, sourcesByID) {

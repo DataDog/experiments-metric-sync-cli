@@ -206,6 +206,20 @@
         }
       }
     },
+    "property_breakout": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["property", "values"],
+      "properties": {
+        "property": { "$ref": "#/$defs/property_ref" },
+        "values": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
     "metric": {
       "type": "object",
       "additionalProperties": false,
@@ -230,6 +244,11 @@
         "metric_type": {
           "type": "string",
           "enum": ["simple", "ratio", "percentile"]
+        },
+        "property_breakouts": {
+          "description": "Selected property values for analysis breakouts. Omit to preserve existing settings; [] clears them. Does not filter the parent metric.",
+          "type": "array",
+          "items": { "$ref": "#/$defs/property_breakout" }
         },
         "format_as_percent": {
           "type": "boolean",

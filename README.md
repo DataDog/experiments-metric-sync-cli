@@ -158,6 +158,31 @@ See [the filter example](examples/filters.yaml).
 The `operator` field remains an alias for `operation`. These changes require a release newer than
 v0.1.1; they are available when building this branch from source.
 
+### Metric-property breakouts
+
+Use metric-level `property_breakouts` to select properties and values for analysis
+breakdowns without restricting the parent metric. This is separate from source
+`properties` (which declare available columns) and aggregation `property_filters`
+(which restrict the parent metric). See [the breakout example](examples/breakouts.yaml).
+
+```yaml
+property_breakouts:
+  - property:
+      warehouse_metric_source_sync_id: purchases
+      property_sync_id: country
+    values: ["US", "CA"]
+```
+
+Omit the field to preserve existing selections, use `[]` to clear them, or provide
+a list to replace them. Each property must belong to every aggregation source;
+cross-source ratios are unsupported. Values are distinct nonempty strings.
+Explicit values need not have been discovered yet. For an external source, set
+`warehouse_metric_source_sync_tag` on both the property and measure references.
+
+This option requires corresponding Metric Sync API support and metric-property
+breakouts to be enabled for the organization. Do not release this CLI change
+before that API support is deployed.
+
 ## Idempotency
 
 The CLI sends an `Idempotency-Key` for `plan` and `execute` requests. In CI, the

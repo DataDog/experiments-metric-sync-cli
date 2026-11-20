@@ -82,7 +82,14 @@ type Property struct {
 	Description string `json:"description,omitempty" yaml:"description,omitempty"`
 }
 
+type PropertyBreakout struct {
+	Property *PropertyRef `json:"property" yaml:"property"`
+	Values   []string     `json:"values" yaml:"values"`
+}
+
 type Metric struct {
+	// A pointer preserves [] (clear) separately from omission (leave unchanged).
+	PropertyBreakouts           *[]PropertyBreakout          `json:"property_breakouts,omitempty" yaml:"property_breakouts,omitempty"`
 	SyncID                      string                       `json:"sync_id" yaml:"sync_id"`
 	ExistingID                  string                       `json:"existing_id,omitempty" yaml:"existing_id,omitempty"`
 	UpgradeByName               bool                         `json:"upgrade_by_name,omitempty" yaml:"upgrade_by_name,omitempty"`

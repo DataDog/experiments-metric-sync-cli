@@ -1,0 +1,35 @@
+schema_version: 1
+sync_tag: revenue-breakouts
+warehouse_metric_sources:
+  - sync_id: purchases
+    name: Purchases
+    sql: SELECT user_id, event_time, revenue, country FROM analytics.purchases
+    timestamp_column: event_time
+    subject_types:
+      - name: User
+        column_name: user_id
+    measures:
+      - sync_id: revenue
+        name: Revenue
+        column_name: revenue
+        column_type: FLOAT
+    properties:
+      - sync_id: country
+        property_name: Country
+        property_column: country
+        property_type: STRING
+metrics:
+  - sync_id: revenue
+    name: Revenue
+    metric_type: simple
+    # This selects analysis breakdowns; the parent metric still includes all countries.
+    property_breakouts:
+      - property:
+          warehouse_metric_source_sync_id: purchases
+          property_sync_id: country
+        values: ["US", "CA"]
+    simple_metric_aggregation:
+      operation: sum
+      measure:
+        warehouse_metric_source_sync_id: purchases
+        measure_sync_id: revenue
