@@ -286,3 +286,32 @@ func TestPlanLabelsChangesAsProposed(t *testing.T) {
 		assertContains(t, out.String(), want)
 	}
 }
+
+func TestPrintResultShowsOwnerEmailChanges(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+	var result api.Result
+	body := `{
+		"status": "planned",
+		"plan": true,
+		"updated": {"metrics": [
+			{"sync_id": "revenue", "id": "revenue-id", "changes": {"owner_email": {"before": "old.owner@example.com", "after": "jane.doe@example.com"}}},
+			{"sync_id": "signups", "id": "signups-id", "changes": {"owner_email": {"before": "old.owner@example.com", "after": null}}}
+		]}
+	}`
+	if err := json.Unmarshal([]byte(body), &result); err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	if err := PrintResult(&out, &result); err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		"Update metric revenue (ID: revenue-id)",
+		`owner_email: "old.owner@example.com" -> "jane.doe@example.com"`,
+		"Update metric signups (ID: signups-id)",
+		// A cleared owner arrives as a null after value.
+		`owner_email: "old.owner@example.com" -> null`,
+	} {
+		assertContains(t, out.String(), want)
+	}
+}
