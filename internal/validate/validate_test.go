@@ -580,23 +580,23 @@ func TestValidateOwnerEmail(t *testing.T) {
 		valid bool
 	}{
 		{email: "", valid: true},
-		{email: "jane+metrics@acme.com", valid: true},
-		{email: "jane@eu.acme.co.uk", valid: true},
-		{email: "jane@acme.engineering", valid: true},
-		{email: "o'brien-smith@acme.com", valid: true},
-		{email: "jane_doe@acme.com", valid: true},
-		{email: "Jane.Doe@ACME.com", valid: true},
-		{email: "josé@acme.com", valid: true},
+		{email: "jane+metrics@example.com", valid: true},
+		{email: "jane@eu.example.co.uk", valid: true},
+		{email: "jane@example.engineering", valid: true},
+		{email: "o'brien-smith@example.com", valid: true},
+		{email: "jane_doe@example.com", valid: true},
+		{email: "Jane.Doe@EXAMPLE.com", valid: true},
+		{email: "josé@example.com", valid: true},
 		{email: "jane@bücher.de", valid: true},
-		{email: " Jane.Doe@ACME.com ", valid: true},
+		{email: " Jane.Doe@EXAMPLE.com ", valid: true},
 		{email: "   ", valid: false},
 		{email: "jane.doe@", valid: false},
-		{email: "@acme.com", valid: false},
-		{email: "jane doe@acme.com", valid: false},
-		{email: "jane@@acme.com", valid: false},
-		{email: "jane..doe@acme.com", valid: false},
-		{email: "Jane <jane@acme.com>", valid: false},
-		{email: "jane@acme.com (Jane)", valid: false},
+		{email: "@example.org", valid: false},
+		{email: "jane doe@example.com", valid: false},
+		{email: "jane@@example.com", valid: false},
+		{email: "jane..doe@example.com", valid: false},
+		{email: "Jane <jane@example.com>", valid: false},
+		{email: "jane@example.com (Jane)", valid: false},
 	} {
 		t.Run(tc.email, func(t *testing.T) {
 			issues := ValidateFiles([]model.FileConfig{{
@@ -625,7 +625,7 @@ func TestValidateOwnerEmail(t *testing.T) {
 			if issue.Path != "metrics[0].owner_email" || !strings.Contains(issue.Message, `"checkout_revenue"`) {
 				t.Fatalf("unexpected issue: %v", issue)
 			}
-			// Issues are written to the debug log, which must not hold the address.
+			// Issues reach the validation output and the debug log, so a rejected address must not be repeated.
 			if trimmed := strings.TrimSpace(tc.email); trimmed != "" && strings.Contains(issue.Error(), trimmed) {
 				t.Fatalf("issue repeats the email address: %v", issue)
 			}

@@ -115,7 +115,9 @@ func validateMetric(add func(string, string), path string, metric model.Metric) 
 	if metric.DesiredChange != "" && !oneOf(metric.DesiredChange, "METRIC_INCREASES", "METRIC_DECREASES") {
 		add(path+".desired_change", "must be METRIC_INCREASES or METRIC_DECREASES")
 	}
-	// The message leaves out the address because validation issues are written to the debug log.
+	// The message names the metric rather than echoing the address, so a rejected
+	// value stays out of the validation output and its debug log entry. A valid
+	// address still reaches the debug log: plan and execute log the request payload.
 	if metric.OwnerEmail != "" && !validOwnerEmail(metric.OwnerEmail) {
 		add(path+".owner_email", fmt.Sprintf("metric %q: must be a plain email address such as jane@example.com, without a display name or comment", metric.SyncID))
 	}
